@@ -5,6 +5,7 @@ import type { AlertKind, LiveStatus, RouteAlert, WatchedLeg } from "../types.js"
 import { getTripUpdates } from "../../../src/nta.js";
 import { DB_PATH, findStops } from "../../../src/timetable.js";
 import { liveStatusFor, type TripUpdateRow } from "./plannerBridge.js";
+import { pushScopedAlert } from "./push.js";
 
 const POLL_INTERVAL_MS = 25_000;
 const LATE_MIN = 5; // a delay worth telling someone about
@@ -195,17 +196,23 @@ export function startLiveFeed(io: Server) {
   else console.log("[liveFeed] No NTA_API_KEY - using the simulated delay feed.");
 
   const timer = setInterval(async () => {
+    // Push subscriptions can still be live with no socket connected (tab
+    // backgrounded or closed), so this doesn't early-return on zero sockets -
+    // the real feed poll is cheap anyway (nta.js caches it for 60s).
     const sockets = [...io.sockets.sockets.values()];
-    if (sockets.length === 0) return;
 
     if (useRealFeed) {
       const watching = sockets.filter((s) => ((s.data.watchedLegs as WatchedLeg[] | undefined) ?? []).length > 0);
       if (watching.length === 0) return; // don't spend the 1 call/min budget when nobody's journey has rides
       try {
         const byTrip = await pollRealFeed();
+        const allAlerts: RouteAlert[] = [];
         for (const socket of watching) {
-          alertsForSocket(socket, byTrip).forEach((alert) => socket.emit("route-alert", alert));
+          const alerts = alertsForSocket(socket, byTrip);
+          alerts.forEach((alert) => socket.emit("route-alert", alert));
+          allAlerts.push(...alerts);
         }
+        await Promise.all(allAlerts.map((alert) => pushScopedAlert(alert)));
       } catch (err) {
         console.error("[liveFeed] real feed poll failed:", err instanceof Error ? err.message : err);
       }
@@ -218,6 +225,7 @@ export function startLiveFeed(io: Server) {
       const optionIds = (socket.data.watchedOptionIds as Set<string> | undefined) ?? new Set();
       if (optionIds.has(alert.optionId)) socket.emit("route-alert", alert);
     }
+    await pushScopedAlert(alert);
   }, POLL_INTERVAL_MS);
 
   return () => clearInterval(timer);

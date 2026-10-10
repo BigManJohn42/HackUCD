@@ -84,6 +84,11 @@ export interface ChatContext {
   isPro?: boolean;
   recentAlerts?: RouteAlert[];
   allowPlanning?: boolean;
+  currentJourney?: {
+    from: string;
+    to: string;
+    stopovers: { place: string; stayMinutes: number }[];
+  };
 }
 
 export interface ChatTurn {

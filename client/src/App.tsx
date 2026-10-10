@@ -19,6 +19,7 @@ import {
   requestNotificationPermission,
   type NotificationPermissionState,
 } from "./notifications";
+import { subscribeToPush, updatePushJourney } from "./push";
 import { HomePage } from "./pages/HomePage";
 import { ChatWidget, type ChatMessage } from "./components/ChatWidget";
 import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
@@ -84,6 +85,52 @@ function defaultSelections(corridor: Corridor, preference: Preference): Record<s
     map[leg.id] = best.id;
   }
   return map;
+}
+
+/** "HH:MM" (optionally "HH:MM (+1 day)") plus some minutes, wrapping at 24h. */
+function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const clean = time.replace(/\s*\(\+1 day\)\s*$/, "");
+  const [h, m] = clean.split(":").map(Number);
+  const total = (((h * 60 + m + minutesToAdd) % 1440) + 1440) % 1440;
+  const hh = String(Math.floor(total / 60)).padStart(2, "0");
+  const mm = String(total % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/** Minutes from one "HH:MM" to a later one, assuming at most one midnight crossing. */
+function minutesBetween(start: string, end: string): number {
+  const toMin = (t: string) => {
+    const [h, m] = t.replace(/\s*\(\+1 day\)\s*$/, "").split(":").map(Number);
+    return h * 60 + m;
+  };
+  const s = toMin(start);
+  const e = toMin(end);
+  return e >= s ? e - s : e + 1440 - s;
+}
+
+/** Replaces everything after `idx` with a freshly planned continuation, so a
+ * long break actually reflects real departures after it - not just the
+ * schedule that was true when the journey was first searched. */
+function spliceContinuation(corridor: Corridor, idx: number, continuation: Corridor): Corridor {
+  const keep = corridor.legs.slice(0, idx + 1);
+  const prefix = `${corridor.legs[idx].id}-cont`;
+  const added = continuation.legs.map((leg, i) => ({
+    ...leg,
+    id: `${prefix}-${i}`,
+    options: leg.options.map((opt, j) => ({ ...opt, id: `${prefix}-${i}-${j}` })),
+  }));
+  const legs = [...keep, ...added];
+  const stopCoords = { ...corridor.stopCoords, ...continuation.stopCoords };
+  const summary =
+    corridor.summary && continuation.summary
+      ? {
+          leaveAt: corridor.summary.leaveAt,
+          arriveAt: continuation.summary.arriveAt,
+          durationMin: minutesBetween(corridor.summary.leaveAt, continuation.summary.arriveAt),
+          liveData: continuation.summary.liveData,
+        }
+      : corridor.summary;
+  return { ...corridor, legs, stopCoords, summary };
 }
 
 export default function App() {
@@ -271,6 +318,7 @@ export default function App() {
   // to this journey instead of broadcasting every disruption in Dublin.
   useEffect(() => {
     watchJourney(corridor);
+    updatePushJourney(corridor); // no-op until the user has enabled push
   }, [corridor]);
 
   function handlePreferenceChange(next: Preference) {
@@ -286,19 +334,51 @@ export default function App() {
     setOpenBreaks((prev) => ({ ...prev, [legId]: !prev[legId] }));
   }
 
+  // After a break is actually set, re-plan everything from that point onward
+  // using the real departure board for the resume time - not just the
+  // schedule that was true when the journey was first searched.
+  async function maybeExtendAfterBreak(leg: Leg, minutes: number) {
+    if (!corridor) return;
+    const idx = corridor.legs.findIndex((l) => l.id === leg.id);
+    if (idx === -1 || idx === corridor.legs.length - 1) return; // nothing after this leg
+    const selected = leg.options.find((o) => o.id === selections[leg.id]) ?? leg.options[0];
+    if (!selected.arriveAt) return; // sample corridor / not a real timed leg - nothing to recompute from
+    const finalDestination = corridor.legs[corridor.legs.length - 1].to;
+    if (leg.to === finalDestination) return;
+
+    const resumeTime = addMinutesToTime(selected.arriveAt, minutes);
+    try {
+      const continuation = await searchJourney({ from: leg.to, to: finalDestination, depart: resumeTime });
+      const prefix = `${leg.id}-cont`;
+      setCorridor((prev) => (prev && prev.legs[idx]?.id === leg.id ? spliceContinuation(prev, idx, continuation) : prev));
+      setSelections((prev) => {
+        const next = { ...prev };
+        continuation.legs.forEach((_, i) => {
+          next[`${prefix}-${i}`] = `${prefix}-${i}-0`; // default to each new leg's primary option
+        });
+        return next;
+      });
+    } catch {
+      // keep the existing plan if a continuation can't be found (e.g. place mismatch)
+    }
+  }
+
   async function handleGetBreakSuggestion(leg: Leg, minutes: number): Promise<string> {
-    const { reply } = await askConcierge(
-      `I have ${minutes} minutes free at ${leg.to}. What should I do, and when should I continue my journey?`,
-      {
-        corridorName: corridor?.name,
-        preference,
-        currentLegFrom: leg.from,
-        currentLegTo: leg.to,
-        breakMinutes: minutes,
-        transferAmenities: leg.transferAmenities,
-        recentAlerts: alerts.slice(0, 3),
-      }
-    );
+    const [{ reply }] = await Promise.all([
+      askConcierge(
+        `I have ${minutes} minutes free at ${leg.to}. What should I do, and when should I continue my journey?`,
+        {
+          corridorName: corridor?.name,
+          preference,
+          currentLegFrom: leg.from,
+          currentLegTo: leg.to,
+          breakMinutes: minutes,
+          transferAmenities: leg.transferAmenities,
+          recentAlerts: alerts.slice(0, 3),
+        }
+      ),
+      maybeExtendAfterBreak(leg, minutes),
+    ]);
     return reply;
   }
 
@@ -351,13 +431,30 @@ export default function App() {
   async function handleEnableNotifications() {
     const result = await requestNotificationPermission();
     setNotifPermission(result);
+    if (result === "granted") await subscribeToPush(corridor);
   }
 
   async function handleChatSend(message: string, history: readonly ChatMessage[]): Promise<string> {
+    // Real journeys carry enough structure (a "stay" leg per stopover) to
+    // describe the current plan back to the model, so "add a stop in X" or
+    // "make the Ennis stop 3 hours" can be understood as an edit rather than
+    // needing the whole trip restated.
+    const currentJourney =
+      corridor?.summary && corridor.legs.length > 0
+        ? {
+            from: corridor.legs[0].from,
+            to: corridor.legs[corridor.legs.length - 1].to,
+            stopovers: corridor.legs
+              .filter((l) => l.options[0]?.mode === "stay")
+              .map((l) => ({ place: l.from, stayMinutes: l.options[0].durationMin })),
+          }
+        : undefined;
+
     const { reply, corridor: newCorridor } = await askConciergeChat(message, history, {
       corridorName: corridor?.name,
       preference,
       recentAlerts: alerts.slice(0, 3),
+      currentJourney,
     });
     if (newCorridor) {
       if (outOfFreePlans()) {

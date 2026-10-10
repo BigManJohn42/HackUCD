@@ -97,12 +97,12 @@ export function PlannerPanel({
               {myLocationEnabled ? "Hide my location" : "Show my location on map"}
             </button>
             {notifPermission === "granted" ? (
-              <span className="notif-status">Delay notifications are on</span>
+              <span className="notif-status">Push notifications are on - you'll get them even with the app closed</span>
             ) : notifPermission === "denied" ? (
               <span className="notif-status">Notifications blocked - enable them in your browser's site settings</span>
             ) : notifPermission === "unsupported" ? null : (
               <button type="button" className="btn-secondary" onClick={onEnableNotifications}>
-                Enable delay notifications
+                Enable push notifications for delays
               </button>
             )}
           </div>
