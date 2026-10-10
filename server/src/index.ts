@@ -10,6 +10,7 @@ import { chatRouter } from "./routes/chat.js";
 import { billingRouter } from "./routes/billing.js";
 import { planRouter } from "./routes/plan.js";
 import { geometryRouter } from "./routes/geometry.js";
+import { pushRouter } from "./routes/push.js";
 import { startLiveFeed } from "./services/liveFeed.js";
 
 // NTA_API_KEY and GTFS_FEED live in the repo-root .env (shared with the
@@ -29,6 +30,7 @@ app.use("/api", chatRouter);
 app.use("/api", billingRouter);
 app.use("/api", planRouter);
 app.use("/api", geometryRouter);
+app.use("/api", pushRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

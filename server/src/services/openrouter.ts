@@ -53,6 +53,16 @@ function buildSystemPrompt(context: ChatContext): string {
       "If a planned journey includes a long layover or stopover, you may mention its length as a plain fact, but do not suggest what to do there unless the user explicitly asks."
     );
   }
+  if (context.currentJourney) {
+    const { from, to, stopovers } = context.currentJourney;
+    const stopoverText = stopovers.length
+      ? ` via ${stopovers.map((s) => `${s.place} (${s.stayMinutes} min)`).join(", ")}`
+      : "";
+    lines.push(
+      `The user's current planned journey is from ${from} to ${to}${stopoverText}.`,
+      "If they ask to add, remove, or change a stop, or adjust a stopover's length, call plan_journey again with the FULL updated set of stopovers (not just the change) - it replaces the whole itinerary, so anything you omit is dropped."
+    );
+  }
   if (context.corridorName) lines.push(`Route: ${context.corridorName}.`);
   if (context.preference) lines.push(`User's stated preference: ${context.preference}.`);
   if (context.currentLegFrom && context.currentLegTo) {

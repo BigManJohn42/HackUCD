@@ -4,6 +4,7 @@ import { belfieldToCityCentre } from "../data/corridor.js";
 import type { RouteAlert } from "../types.js";
 import { getTripUpdates } from "../../../src/nta.js";
 import { DB_PATH } from "../../../src/timetable.js";
+import { pushScopedAlert } from "./push.js";
 
 const POLL_INTERVAL_MS = 25_000;
 const DELAY_THRESHOLD_SECS = 300; // only surface delays of 5+ minutes
@@ -140,18 +141,19 @@ export function startLiveFeed(io: Server) {
   else console.log("[liveFeed] No NTA_API_KEY - using the simulated delay feed.");
 
   const timer = setInterval(async () => {
+    // Push subscriptions can still be live with no socket connected (tab
+    // backgrounded or closed), so this doesn't early-return on zero sockets -
+    // the real feed poll is cheap anyway (nta.js caches it for 60s).
     const sockets = [...io.sockets.sockets.values()];
-    if (sockets.length === 0) return;
 
     if (useRealFeed) {
       try {
         const alerts = await pollRealFeed();
-        if (alerts.length === 0) return;
         for (const socket of sockets) {
           const { tripIds } = watchedSets(socket);
-          const relevant = alerts.filter((a) => tripIds.has(a.tripId)).slice(0, 3);
-          relevant.forEach((alert) => socket.emit("route-alert", alert));
+          alerts.filter((a) => tripIds.has(a.tripId)).slice(0, 3).forEach((alert) => socket.emit("route-alert", alert));
         }
+        await Promise.all(alerts.map((alert) => pushScopedAlert(alert)));
       } catch (err) {
         console.error("[liveFeed] real feed poll failed:", err);
       }
@@ -164,6 +166,7 @@ export function startLiveFeed(io: Server) {
       const { optionIds } = watchedSets(socket);
       if (optionIds.has(alert.optionId)) socket.emit("route-alert", alert);
     }
+    await pushScopedAlert(alert);
   }, POLL_INTERVAL_MS);
 
   return () => clearInterval(timer);
