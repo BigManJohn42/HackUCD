@@ -25,14 +25,13 @@ const routeId = opt("route");
 const fmtDelay = (s) => (s == null ? "?" : `${s >= 0 ? "+" : ""}${Math.round(s / 60)} min`);
 const fmtTime = (t) => (t ? new Date(t * 1000).toLocaleTimeString("en-IE") : "");
 
-const [{ timestamp, rows }, { vehicles }] = await Promise.all([
-  getTripUpdates(),
-  getVehiclePositions(),
-]);
+const { timestamp, rows } = await getTripUpdates();
+// The key allows one NTA call per minute, so vehicle positions are only shown when already cached.
+const vehicles = await getVehiclePositions().then((v) => v.vehicles, () => null);
 
 console.log(`Feed time: ${fmtTime(timestamp)}`);
 console.log(`Trip updates: ${new Set(rows.map((r) => r.tripId)).size} trips, ${rows.length} stop updates`);
-console.log(`Vehicles with positions: ${vehicles.length}\n`);
+console.log(`Vehicles with positions: ${vehicles ? vehicles.length : "(skipped - 1 NTA call per minute)"}\n`);
 
 let selected = rows;
 if (stopId) selected = selected.filter((r) => r.stopId === stopId);

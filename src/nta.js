@@ -1,38 +1,81 @@
 // Client for the NTA (Transport for Ireland) GTFS-Realtime API.
 // Docs / API key: https://developer.nationaltransport.ie
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 
 const { FeedMessage } = GtfsRealtimeBindings.transit_realtime;
 
 const BASE_URL = process.env.NTA_BASE_URL ?? "https://api.nationaltransport.ie/gtfsr/v2";
 
-// The API is rate-limited, so cache each feed briefly and share it between callers.
-const CACHE_MS = Number(process.env.NTA_CACHE_MS ?? 60_000);
-const cache = new Map(); // feed name -> { at, promise }
+// NTA's fair-usage policy allows each key ONE call every 60 seconds, across all feeds.
+// The CLI scripts and the UI server are separate processes, so responses and the time
+// of the last call are shared through files in data/cache/.
+const MIN_INTERVAL_MS = 61_000;
+const STALE_OK_MS = 15 * 60_000; // serve saved data up to this old when we can't call
+const CACHE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "cache");
+const LAST_CALL = path.join(CACHE_DIR, "nta-last-call");
+const feedFile = (feed) => path.join(CACHE_DIR, `nta-${feed}.pb`);
 
-async function fetchFeed(feed) {
-  const apiKey = process.env.NTA_API_KEY;
-  if (!apiKey) throw new Error("NTA_API_KEY is not set (put it in .env)");
+const memory = new Map(); // feed -> { at, data }
+const inflight = new Map(); // feed -> promise, so concurrent callers share one request
 
-  const res = await fetch(`${BASE_URL}/${feed}`, {
-    headers: { "x-api-key": apiKey },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(`NTA ${feed} request failed: ${res.status} ${res.statusText}`);
-  }
-  const buffer = new Uint8Array(await res.arrayBuffer());
-  return FeedMessage.toObject(FeedMessage.decode(buffer), { longs: Number, enums: String });
+const ageMs = (file) => (fs.existsSync(file) ? Date.now() - fs.statSync(file).mtimeMs : Infinity);
+const decode = (buf) => FeedMessage.toObject(FeedMessage.decode(buf), { longs: Number, enums: String });
+
+function readSaved(feed, maxAge) {
+  const file = feedFile(feed);
+  if (ageMs(file) > maxAge) return null;
+  const mem = memory.get(feed);
+  const at = fs.statSync(file).mtimeMs;
+  if (mem?.at === at) return mem.data;
+  const data = decode(new Uint8Array(fs.readFileSync(file)));
+  memory.set(feed, { at, data });
+  return data;
 }
 
-function getFeed(feed) {
-  const hit = cache.get(feed);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.promise;
+async function callApi(feed) {
+  const apiKey = process.env.NTA_API_KEY?.trim();
+  if (!apiKey) throw new Error("NTA_API_KEY is not set (put it in .env)");
 
-  const promise = fetchFeed(feed);
-  cache.set(feed, { at: Date.now(), promise });
-  promise.catch(() => cache.delete(feed)); // don't cache failures
-  return promise;
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.writeFileSync(LAST_CALL, feed); // claim the slot before calling, so other processes back off
+  const res = await fetch(`${BASE_URL}/${feed}`, {
+    headers: { "x-api-key": apiKey },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`NTA ${feed} request failed: ${res.status} ${res.statusText}`);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const data = decode(buf);
+  fs.writeFileSync(feedFile(feed), buf);
+  memory.set(feed, { at: fs.statSync(feedFile(feed)).mtimeMs, data });
+  return data;
+}
+
+async function getFeed(feed) {
+  // Fresh enough already (fetched by us or another process within the last minute)?
+  const fresh = readSaved(feed, MIN_INTERVAL_MS);
+  if (fresh) return fresh;
+
+  // Someone used this key's one call in the last minute: serve saved data if we have any.
+  const waitMs = MIN_INTERVAL_MS - ageMs(LAST_CALL);
+  if (waitMs > 0) {
+    const saved = readSaved(feed, STALE_OK_MS);
+    if (saved) return saved;
+    throw new Error(`NTA rate limit (1 call/min per key): try again in ${Math.ceil(waitMs / 1000)}s`);
+  }
+
+  if (!inflight.has(feed)) {
+    inflight.set(feed, callApi(feed).finally(() => inflight.delete(feed)));
+  }
+  try {
+    return await inflight.get(feed);
+  } catch (err) {
+    const saved = readSaved(feed, STALE_OK_MS); // e.g. a 429: fall back to the last good copy
+    if (saved) return saved;
+    throw err;
+  }
 }
 
 /**
