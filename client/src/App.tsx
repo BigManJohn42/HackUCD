@@ -185,6 +185,7 @@ export default function App() {
       setPreference("fastest");
       setSelections(defaultSelections(c, "fastest"));
       setOpenBreaks({});
+      setAlerts([]); // a previous journey's alerts don't apply to this one
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Could not plan that journey.");
     } finally {
@@ -201,6 +202,7 @@ export default function App() {
       setPreference("fastest");
       setSelections(defaultSelections(c, "fastest"));
       setOpenBreaks({});
+      setAlerts([]);
     } catch {
       setSearchError("Could not load the sample route.");
     } finally {

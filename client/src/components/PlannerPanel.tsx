@@ -80,6 +80,10 @@ export function PlannerPanel({
                 </div>
               </div>
             )}
+            <p className="leg-meta" style={{ marginTop: 10, marginBottom: 0 }}>
+              Cost and CO2 are flat per-mode estimates (not live fares or distance-based
+              figures) - useful for comparing modes, not for exact budgeting.
+            </p>
           </div>
 
           <RouteMap corridor={corridor} selections={selections} myLocationEnabled={myLocationEnabled} />
