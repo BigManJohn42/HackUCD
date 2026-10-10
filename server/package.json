@@ -1,5 +1,5 @@
 {
-  "name": "commute-planner-server",
+  "name": "eirgo-server",
   "private": true,
   "version": "0.1.0",
   "type": "module",

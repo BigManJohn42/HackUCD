@@ -1,4 +1,4 @@
-# Commute Concierge
+# ÉirGo
 
 Editable, step-by-step commute planner for one real Dublin corridor (UCD Belfield -> city
 centre via Dundrum), with live disruption alerts over WebSocket and an AI concierge

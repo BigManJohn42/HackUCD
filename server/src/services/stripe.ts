@@ -31,7 +31,7 @@ export async function createCheckoutSession(clientOrigin: string) {
           unit_amount: 299,
           recurring: { interval: "month" },
           product_data: {
-            name: "Commute Concierge Pro",
+            name: "ÉirGo Pro",
             description:
               "Unlimited saved itineraries and richer AI break recommendations.",
           },

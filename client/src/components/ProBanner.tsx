@@ -17,7 +17,7 @@ export function ProBanner({
       ) : (
         <>
           <div>
-            <strong>Commute Concierge Pro</strong> &mdash; &euro;2.99/month for unlimited saved
+            <strong>ÉirGo Pro</strong> &mdash; &euro;2.99/month for unlimited saved
             itineraries and more detailed AI recommendations.
           </div>
           <button type="button" className="btn-primary" onClick={onUpgrade} disabled={upgrading}>

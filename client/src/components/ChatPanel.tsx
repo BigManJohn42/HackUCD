@@ -26,7 +26,7 @@ export function ChatPanel({
 
   return (
     <div className="card chat-panel">
-      <h2 style={{ marginTop: 0 }}>Ask the commute concierge</h2>
+      <h2 style={{ marginTop: 0 }}>Ask ÉirGo</h2>
       <div className="chat-log">
         {messages.length === 0 && (
           <p style={{ color: "var(--color-text-muted)" }}>

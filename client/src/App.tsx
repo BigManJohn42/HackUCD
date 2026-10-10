@@ -161,7 +161,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Commute Concierge</h1>
+        <h1>ÉirGo</h1>
         <p>{corridor.name}</p>
       </header>
 

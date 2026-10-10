@@ -50,7 +50,7 @@ export async function askConcierge(message: string, context: ChatContext): Promi
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "http://localhost:5173",
-      "X-Title": "Commute Concierge",
+      "X-Title": "ÉirGo",
     },
     body: JSON.stringify({
       model: process.env.OPENROUTER_MODEL || "anthropic/claude-haiku-4.5",
