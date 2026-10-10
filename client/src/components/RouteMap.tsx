@@ -16,8 +16,8 @@ L.Icon.Default.mergeOptions({
 });
 
 const MODE_COLOR: Record<Mode, string> = {
-  walk: "#5b655f",
-  bus: "#1f6f4f",
+  walk: "#65675f",
+  bus: "#588157",
   luas: "#2e7fb8",
   rail: "#2e7fb8",
   cycle: "#b8860b",

@@ -24,7 +24,11 @@ export function HomePage() {
     <section>
       <div className="hero">
         <span className="eyebrow">A little clarity for your everyday journey</span>
-        <h1>Plan your commute, one clear step at a time.</h1>
+        <h1>
+          Plan your commute,
+          <br />
+          <em>one clear step at a time.</em>
+        </h1>
         <p>
           Real Dublin stops and timetables, a journey you can edit leg by leg, and an AI
           concierge that tells you what to do with a break between transfers.
