@@ -16,6 +16,7 @@ import {
   type NotificationPermissionState,
 } from "./notifications";
 import { HomePage } from "./pages/HomePage";
+import { ChatWidget } from "./components/ChatWidget";
 import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
 import type { Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
@@ -60,6 +61,13 @@ function defaultSelections(corridor: Corridor, preference: Preference): Record<s
 
 export default function App() {
   const [page, setPage] = useState<Page>(currentPage);
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem("eirgo-theme") === "dark";
+    } catch {
+      return false;
+    }
+  });
   const [font, setFont] = useState<FontSize>(() => {
     try {
       const saved = localStorage.getItem("eirgo-font");
@@ -92,6 +100,16 @@ export default function App() {
   useEffect(() => {
     document.title = `${PAGE_LABEL[page]} · ÉirGo`;
   }, [page]);
+
+  useEffect(() => {
+    const theme = darkMode ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("eirgo-theme", theme);
+    } catch {
+      /* The toggle still works when browser storage is unavailable. */
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     document.documentElement.dataset.font = font;
@@ -260,13 +278,23 @@ export default function App() {
             </a>
           ))}
         </nav>
-        <div className="font-control">
-          <label htmlFor="font-size">Text size</label>
-          <select id="font-size" value={font} onChange={(e) => setFont(e.target.value as FontSize)}>
-            <option value="small">Small</option>
-            <option value="standard">Standard</option>
-            <option value="large">Large</option>
-          </select>
+        <div className="header-controls">
+          <div className="font-control">
+            <label htmlFor="font-size">Text size</label>
+            <select id="font-size" value={font} onChange={(e) => setFont(e.target.value as FontSize)}>
+              <option value="small">Small</option>
+              <option value="standard">Standard</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            aria-pressed={darkMode}
+            onClick={() => setDarkMode((enabled) => !enabled)}
+          >
+            Dark mode
+          </button>
         </div>
       </header>
 
@@ -288,6 +316,7 @@ export default function App() {
         <span>ÉirGo</span>
         <span>A clearer journey, one step at a time.</span>
       </footer>
+      <ChatWidget visible={page === "journey"} />
     </div>
   );
 }
