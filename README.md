@@ -1,41 +1,34 @@
-# Commute Concierge
+# EireGo — front-end v0.1.1
 
-Editable, step-by-step commute planner for one real Dublin corridor (UCD Belfield -> city
-centre via Dundrum), with live disruption alerts over WebSocket and an AI concierge
-(OpenRouter) that gives break-time recommendations at each transfer.
+A desktop commute-planning prototype for Dublin, built with React, TypeScript, Vite, and plain CSS.
 
-## Setup
+## Run the front end
 
-```bash
-cd server && npm install && cp .env.example .env
-cd ../client && npm install
+```sh
+cd client
+npm install
+npm run dev
 ```
 
-Fill in `server/.env`:
-- `OPENROUTER_API_KEY` — https://openrouter.ai/keys (chat works with a canned fallback
-  reply if left blank, so the rest of the app still runs without it)
-- `STRIPE_SECRET_KEY` — a **test mode** secret key from
-  https://dashboard.stripe.com/test/apikeys (needed only for the Pro upgrade flow)
+Open http://localhost:5173. Build with `npm run build` and inspect the built app with `npm run preview`.
 
-## Run
+## Pages
 
-Two terminals:
+- **Home:** introduction and three choices for planning or viewing subscriptions.
+- **Manual Planner:** typed destinations with fetched Dublin suggestions, departure date/time, route selection, and step-by-step timetables.
+- **Smart Planner:** chat with transport-data context and structured route cards.
+- **Subscriptions:** monthly and yearly plans with prices and benefits fetched from the server; display only in v0.1.
 
-```bash
-cd server && npm run dev   # http://localhost:4000
-cd client && npm run dev   # http://localhost:5173
-```
+Shared navigation supports browser back/forward and direct hash links. Small, Standard, and Large text settings persist in the browser. Planner state is preserved while navigating and cleared on reload.
 
-Open http://localhost:5173.
+## Back-end integration
 
-## What's real vs. mocked
+The front end makes real requests and contains no sample responses or hardcoded subscription prices. Until the proposed endpoints are implemented, it shows unavailable states with retry controls. Manual destination typing stays available; chat requires loaded transport data.
 
-- **Route data**: hand-entered from NTA's published Dublin Bus/Luas schedules for one
-  corridor — not a general router. See `server/src/data/corridor.ts`.
-- **Live alerts**: simulated in `server/src/services/liveFeed.ts` on the same polling
-  interval a real NTA GTFS-Realtime integration would use. Swap the body of `pollOnce`
-  for a real fetch against the GTFS-RT feed; the Socket.IO relay and UI don't need to
-  change.
-- **AI concierge**: a real OpenRouter call (`server/src/services/openrouter.ts`).
-- **Stripe**: a real sandbox Checkout Session (subscription, test price) — use card
-  `4242 4242 4242 4242`, any future expiry/CVC.
+See [the proposed back-end contract](client/BACKEND-CONTRACT.md) for endpoint names, request/response types, time conventions, and testing instructions. Integration functions are centralized in `client/src/api.ts`.
+
+The `server` directory is the unchanged earlier prototype scaffold. Its existing corridor, AI, simulated-alert, and billing endpoints are not the new v0.1 contract. The back-end team can adapt or replace those independently. Vite currently forwards `/api` requests to port 4000.
+
+## Current boundaries
+
+Version 0.1 focuses on desktop and light mode. Dark mode, mobile/tablet adaptation, hosting, checkout, and per-leg editing are deferred. AI and Stripe credentials must remain on the server.

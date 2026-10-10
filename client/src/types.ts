@@ -1,42 +1,18 @@
-export type Mode = "walk" | "bus" | "luas" | "rail" | "cycle";
-
+export interface TransportData {
+  destinations: { id: string; name: string }[];
+  referenceData: Record<string, unknown>;
+}
+export interface Journey { from: string; to: string; departureTime: string; }
+export interface JourneyStep {
+  id: string; mode: string; service?: string; from: string; to: string;
+  departureTime: string; arrivalTime: string; instructions?: string;
+}
 export interface RouteOption {
-  id: string;
-  mode: Mode;
-  label: string;
-  durationMin: number;
-  departures: string[];
-  costEuro: number;
-  co2Kg: number;
-  notes?: string;
+  id: string; title: string; departureTime: string; arrivalTime: string;
+  durationMin: number; transfers: number; steps: JourneyStep[];
 }
-
-export interface Leg {
-  id: string;
-  from: string;
-  to: string;
-  isTransferPoint: boolean;
-  transferAmenities?: string[];
-  options: RouteOption[];
-}
-
-export interface Corridor {
-  id: string;
-  name: string;
-  legs: Leg[];
-}
-
-export type Preference = "fastest" | "fewest-transfers" | "cheapest";
-
-export interface RouteAlert {
-  legId: string;
-  optionId: string;
-  severity: "info" | "warning" | "critical";
-  message: string;
-  timestamp: string;
-}
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
+export interface ChatMessage { role: "user" | "assistant"; content: string; routes?: RouteOption[]; }
+export interface SubscriptionPlan {
+  id: string; name: string; interval: "month" | "year";
+  price: number; currency: string; benefits: string[];
 }
