@@ -15,22 +15,24 @@ import {
   type NotificationPermissionState,
 } from "./notifications";
 import { HomePage } from "./pages/HomePage";
-import { ManualPlannerPage } from "./pages/ManualPlannerPage";
-import { SmartPlannerPage } from "./pages/SmartPlannerPage";
+import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
-import type { ChatMessage, Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
+import type { Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
 
-const PAGES = ["home", "manual", "smart", "subscriptions"] as const;
+const PAGES = ["home", "journey", "subscriptions"] as const;
 type Page = (typeof PAGES)[number];
 const PAGE_LABEL: Record<Page, string> = {
   home: "Home",
-  manual: "Manual Planner",
-  smart: "Smart Planner",
+  journey: "Journey Planner",
   subscriptions: "Subscriptions",
 };
 
 function currentPage(): Page {
   const value = window.location.hash.replace(/^#\/?/, "");
+  if (value === "manual" || value === "smart") {
+    window.history.replaceState({}, "", window.location.pathname + window.location.search + "#/journey");
+    return "journey";
+  }
   return (PAGES as readonly string[]).includes(value) ? (value as Page) : "home";
 }
 
@@ -74,7 +76,6 @@ export default function App() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isPro, setIsPro] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -159,23 +160,6 @@ export default function App() {
     return reply;
   }
 
-  async function handleSendChat(message: string) {
-    setMessages((prev) => [...prev, { role: "user", content: message }]);
-    try {
-      const { reply } = await askConcierge(message, {
-        corridorName: corridor?.name,
-        preference,
-        recentAlerts: alerts.slice(0, 3),
-      });
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, I couldn't reach the concierge just now." },
-      ]);
-    }
-  }
-
   async function handleSearch(from: string, to: string) {
     setSearching(true);
     setSearchError(null);
@@ -230,14 +214,12 @@ export default function App() {
     if (!corridor) return null;
     let durationMin = 0;
     let costEuro = 0;
-    let co2Kg = 0;
     for (const leg of corridor.legs) {
       const option = leg.options.find((o) => o.id === selections[leg.id]) ?? leg.options[0];
       durationMin += option.durationMin;
       costEuro += option.costEuro;
-      co2Kg += option.co2Kg;
     }
-    return { durationMin, costEuro, co2Kg };
+    return { durationMin, costEuro };
   }, [corridor, selections]);
 
   const plannerProps = {
@@ -293,8 +275,7 @@ export default function App() {
         )}
 
         {page === "home" && <HomePage />}
-        {page === "manual" && <ManualPlannerPage {...plannerProps} />}
-        {page === "smart" && <SmartPlannerPage {...plannerProps} messages={messages} onSend={handleSendChat} />}
+        {page === "journey" && <JourneyPlannerPage {...plannerProps} />}
         {page === "subscriptions" && (
           <SubscriptionsPage isPro={isPro} upgrading={upgrading} onUpgrade={handleUpgrade} />
         )}

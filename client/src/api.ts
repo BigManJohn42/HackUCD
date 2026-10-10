@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import type { ChatMessage, Corridor, RouteAlert } from "./types";
+import type { Corridor, RouteAlert } from "./types";
 
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -60,5 +60,3 @@ export function subscribeToAlerts(onAlert: (alert: RouteAlert) => void): () => v
   socket.on("route-alert", onAlert);
   return () => socket?.off("route-alert", onAlert);
 }
-
-export type { ChatMessage };

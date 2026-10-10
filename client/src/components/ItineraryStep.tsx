@@ -1,13 +1,5 @@
-import type { Leg, Mode } from "../types";
+import type { Leg } from "../types";
 import { BreakPanel } from "./BreakPanel";
-
-const MODE_ICON: Record<Mode, string> = {
-  walk: "\u{1F6B6}",
-  bus: "\u{1F68C}",
-  luas: "\u{1F686}",
-  rail: "\u{1F686}",
-  cycle: "\u{1F6B4}",
-};
 
 export function ItineraryStep({
   leg,
@@ -29,7 +21,7 @@ export function ItineraryStep({
   return (
     <div className="leg">
       <div className="leg-title">
-        {MODE_ICON[selected.mode]} {leg.from} &rarr; {leg.to}
+        {leg.from} &rarr; {leg.to}
       </div>
 
       <select
@@ -40,7 +32,7 @@ export function ItineraryStep({
       >
         {leg.options.map((opt) => (
           <option key={opt.id} value={opt.id}>
-            {MODE_ICON[opt.mode]} {opt.label} - {opt.durationMin} min
+            {opt.label} - {opt.durationMin} min
           </option>
         ))}
       </select>
