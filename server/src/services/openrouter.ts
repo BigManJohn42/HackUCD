@@ -8,13 +8,27 @@ const PLAN_JOURNEY_TOOL = {
   function: {
     name: "plan_journey",
     description:
-      "Plan a real journey using live Irish public transport data (buses, trains, Luas) and replace the user's current itinerary with it. Call this whenever the user asks to go somewhere specific, e.g. 'go from Athlone to UCD', 'how do I get to Galway', 'plan a trip to the airport'.",
+      "Plan a real journey using live Irish public transport data (buses, trains, Luas) and replace the user's current itinerary with it. Call this whenever the user asks to go somewhere specific, e.g. 'go from Athlone to UCD', 'how do I get to Galway', 'plan a trip to the airport', or 'go from Athlone to Galway via Limerick and Ennis'. Include every stopover the user names, in the order they'd travel through them.",
     parameters: {
       type: "object",
       properties: {
         from: { type: "string", description: "Starting place or stop name, as the user said it" },
         to: { type: "string", description: "Destination place or stop name, as the user said it" },
-        via: { type: "string", description: "Optional stopover place, if the user wants to break up the trip" },
+        stopovers: {
+          type: "array",
+          description: "Places to stop at along the way, in travel order. Omit or leave empty for a direct trip.",
+          items: {
+            type: "object",
+            properties: {
+              place: { type: "string", description: "The stopover place or stop name" },
+              stayMinutes: {
+                type: "number",
+                description: "How long to stay there, in minutes, if the user said - otherwise omit (defaults to 120)",
+              },
+            },
+            required: ["place"],
+          },
+        },
         depart: { type: "string", description: "Optional departure time as HH:MM (24h), if the user gave one" },
       },
       required: ["from", "to"],
@@ -25,10 +39,20 @@ const PLAN_JOURNEY_TOOL = {
 function buildSystemPrompt(context: ChatContext): string {
   const lines = [
     "You are a calm, concise commute concierge inside a journey-planning app.",
-    "The user may have low confidence with the local transit system, so avoid jargon and keep replies short (3-5 sentences, plain language).",
-    "When the user has a break between transfers, suggest 1-2 concrete nearby things to do that fit the time available, then clearly state which departure they should aim to catch afterwards.",
-    "When you mention a live disruption, acknowledge it and give a practical fallback instead of just stating the problem.",
+    "The user may have low confidence with the local transit system, so avoid jargon.",
+    "Default to as short a reply as possible - often just 1-2 short sentences. The itinerary itself is already shown on screen, so don't restate its leg-by-leg details; just confirm what changed or answer the question asked.",
+    "Only go into more detail - explaining alternatives, suggesting things to do, listing steps - when the user explicitly asks for that. Don't volunteer it unprompted.",
+    "When you mention a live disruption, acknowledge it briefly and give a practical fallback instead of just stating the problem.",
   ];
+  if (typeof context.breakMinutes === "number") {
+    lines.push(
+      "The user explicitly asked what to do during a break - suggest 1-2 concrete nearby things that fit the time available, then clearly state which departure to aim to catch afterwards."
+    );
+  } else {
+    lines.push(
+      "If a planned journey includes a long layover or stopover, you may mention its length as a plain fact, but do not suggest what to do there unless the user explicitly asks."
+    );
+  }
   if (context.corridorName) lines.push(`Route: ${context.corridorName}.`);
   if (context.preference) lines.push(`User's stated preference: ${context.preference}.`);
   if (context.currentLegFrom && context.currentLegTo) {
@@ -178,7 +202,12 @@ export async function askConciergeWithTools(
     return { reply: choice?.content ?? "Sorry, I didn't get a usable reply that time — try again." };
   }
 
-  let args: { from?: string; to?: string; via?: string; depart?: string };
+  let args: {
+    from?: string;
+    to?: string;
+    depart?: string;
+    stopovers?: { place?: string; stayMinutes?: number }[];
+  };
   try {
     args = JSON.parse(toolCall.function.arguments);
   } catch {
@@ -188,9 +217,14 @@ export async function askConciergeWithTools(
     return { reply: "I need both a starting point and a destination to plan a journey - could you give me both?" };
   }
 
+  const stopovers = (args.stopovers ?? []).filter(
+    (s): s is { place: string; stayMinutes?: number } => !!s.place
+  );
+
   const planResult = await planRealJourney(args.from, args.to, {
     depart: args.depart,
-    vias: args.via ? [args.via] : [],
+    vias: stopovers.map((s) => s.place),
+    stayMins: stopovers.map((s) => s.stayMinutes ?? 120),
   });
 
   const toolResultContent = planResult.ok
@@ -199,6 +233,11 @@ export async function askConciergeWithTools(
         summary: planResult.corridor.summary,
         legCount: planResult.corridor.legs.length,
         name: planResult.corridor.name,
+        // Factual only - the system prompt tells the model not to suggest
+        // activities for these unless the user explicitly asks.
+        stopoverLegs: planResult.corridor.legs
+          .filter((l) => l.options[0]?.mode === "stay")
+          .map((l) => ({ place: l.from, durationMin: l.options[0]!.durationMin })),
       })
     : JSON.stringify({ ok: false, error: planResult.error });
 
