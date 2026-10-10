@@ -1,0 +1,34 @@
+{
+  "name": "hackucd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "delays": "node --env-file-if-exists=.env scripts/delays.js",
+    "gtfs:update": "node --env-file-if-exists=.env scripts/gtfs-update.js && node --disable-warning=ExperimentalWarning scripts/gtfs-index.js",
+    "stops": "node scripts/stops.js",
+    "trains": "node scripts/trains.js",
+    "gtfs:index": "node --disable-warning=ExperimentalWarning scripts/gtfs-index.js",
+    "buses": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/buses.js",
+    "plan": "node --disable-warning=ExperimentalWarning scripts/plan.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BigManJohn42/HackUCD.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/BigManJohn42/HackUCD/issues"
+  },
+  "homepage": "https://github.com/BigManJohn42/HackUCD#readme",
+  "type": "module",
+  "dependencies": {
+    "csv-parse": "^7.0.3",
+    "fast-xml-parser": "^5.11.2",
+    "gtfs-realtime-bindings": "^2.2.0",
+    "yauzl": "^3.4.0"
+  }
+}
