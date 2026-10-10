@@ -25,7 +25,7 @@ export interface PlannerPanelProps {
   searchError: string | null;
   onSearch: (from: string, to: string) => void;
   onLoadSample: () => void;
-  totals: { durationMin: number; costEuro: number; co2Kg: number } | null;
+  totals: { durationMin: number; costEuro: number } | null;
 }
 
 export function PlannerPanel({
@@ -73,10 +73,6 @@ export function PlannerPanel({
                 </div>
                 <div>
                   <span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}
-                </div>
-                <div>
-                  <span>CO2</span>
-                  {totals.co2Kg.toFixed(1)} kg
                 </div>
               </div>
             )}

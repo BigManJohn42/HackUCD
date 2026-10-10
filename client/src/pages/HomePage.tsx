@@ -1,19 +1,13 @@
 const CARDS = [
   {
-    href: "#/manual",
+    href: "#/journey",
     number: "01",
-    title: "Plan it yourself",
+    title: "Journey Planner",
     text: "Type where you're going. Every step of the journey is yours to edit - swap the mode, add a break, see it on the map.",
   },
   {
-    href: "#/smart",
-    number: "02",
-    title: "Talk it through",
-    text: "Not sure what to ask for? Describe your trip to the concierge and get real, live-data recommendations.",
-  },
-  {
     href: "#/subscriptions",
-    number: "03",
+    number: "02",
     title: "Go further with Pro",
     text: "Unlimited saved itineraries and richer break recommendations for a couple of euro a month.",
   },
