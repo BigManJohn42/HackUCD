@@ -14,6 +14,24 @@ Journey planner for Irish public transport, with support for long stopovers betw
 `src/nta.js` exports `getTripUpdates()` and `getVehiclePositions()` (cached for 60s to respect the API rate limit).
 Stop/route IDs are from the static GTFS feed: https://www.transportforireland.ie/transitData/PT_Data.html
 
+## Journey planner (A -> B, with stopovers)
+
+Plans across buses, trains and Luas using the timetable (`npm run gtfs:update` first).
+
+- `npm run plan ucd heuston`
+- `npm run plan ucd galway via athlone` — 2 hour stopover in Athlone (default)
+- `npm run plan ucd galway via athlone stay 90` — custom stopover in minutes; `via` can repeat
+- `npm run plan ucd dublin airport depart 08:30 date 2026-10-12`
+- Add `json` for the raw result (for the frontend).
+
+Options are plain words (`--via` also works in bash) and names need no quotes, because PowerShell + npm
+drop `--` and split quoted arguments.
+Places can be a stop name, a stop number or `lat,lon`. The first plan of each day takes ~20s to build
+that day's connections into `data/cache/`; after that a plan takes under a second.
+`src/planner.js` exports `planJourney({ from, to, vias, stayMins, depart, date })`.
+It uses the Connection Scan Algorithm (earliest arrival, then leaves as late as possible for the same arrival),
+with walking transfers up to 500 m between stops. Timetable only for now — live delays aren't used yet.
+
 ## Buses
 
 Needs the timetable database first: `npm run gtfs:update` (downloads ~163 MB and builds `data/gtfs.db`, takes ~5 min).
