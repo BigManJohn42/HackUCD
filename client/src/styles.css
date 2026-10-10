@@ -310,8 +310,51 @@ input::placeholder {
 
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 320px));
   gap: 16px;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-card-yearly {
+  border-color: var(--color-primary);
+}
+
+.plan-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.plan-savings-badge {
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.plan-billing {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+}
+
+.plan-savings {
+  margin: 0 0 12px;
+  color: var(--color-primary-text);
+  font-weight: 600;
+}
+
+.plan-card .btn-primary,
+.plan-card .pro-badge {
+  margin-top: auto;
+  align-self: flex-start;
 }
 
 .plan-card .price {
@@ -648,6 +691,30 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
+/* Repeatable stopover rows in the journey search form */
+.journey-search .stopover-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  padding: 4px 12px 12px;
+  margin-top: 12px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-bg);
+  border-radius: 0 9px 9px 0;
+}
+.journey-search .stopover-place {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.journey-search .stopover-hours {
+  flex: 0 1 110px;
+}
+.journey-search .stopover-remove {
+  flex: 0 0 auto;
+}
+.journey-search .add-stopover {
+  margin-top: 12px;
 .chat-widget {
   position: fixed;
   width: min(360px, calc(100% - 32px));

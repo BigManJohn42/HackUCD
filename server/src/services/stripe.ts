@@ -20,7 +20,15 @@ export function getProStatus() {
   return isPro;
 }
 
-export async function createCheckoutSession(clientOrigin: string) {
+export type SubscriptionPlan = "monthly" | "yearly";
+
+const PLAN_PRICES = {
+  monthly: { amount: 299, interval: "month" },
+  yearly: { amount: 2499, interval: "year" },
+} as const;
+
+export async function createCheckoutSession(clientOrigin: string, plan: SubscriptionPlan = "monthly") {
+  const price = PLAN_PRICES[plan];
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -28,8 +36,8 @@ export async function createCheckoutSession(clientOrigin: string) {
       {
         price_data: {
           currency: "eur",
-          unit_amount: 299,
-          recurring: { interval: "month" },
+          unit_amount: price.amount,
+          recurring: { interval: price.interval },
           product_data: {
             name: "ÉirGo Pro",
             description:

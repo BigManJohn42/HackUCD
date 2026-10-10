@@ -307,7 +307,8 @@ function describeTrips(tripIds) {
 const MODES = { 0: "Luas", 2: "Train", 3: "Bus" };
 
 /**
- * Plan a journey from -> [vias...] -> to, staying `stayMins` at each via.
+ * Plan a journey from -> [vias...] -> to. stayMins is minutes at each via: one number for
+ * all of them, or an array with one entry per via (missing entries default to 120).
  * depart: "HH:MM" (default now), date: "YYYY-MM-DD" (default today).
  * Returns { segments: [{ from, to, leaveAt, arriveAt, legs }], stays, arriveAt }. Times are seconds since
  * midnight of the start date, so they go past 86400 when a long stopover runs into the next day.
@@ -322,6 +323,7 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
     t = Number(m[1]) * 3600 + Number(m[2]) * 60;
   }
 
+  const stays = vias.map((_, k) => (Array.isArray(stayMins) ? stayMins[k] ?? 120 : stayMins));
   const { stops } = loadStops();
   const places = [from, ...vias, to].map(resolvePlace);
   for (const p of places) if (!p.near.length) throw new Error(`No stops within ${WALK_RADIUS_M} m of ${p.name}`);
@@ -365,12 +367,12 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
       destWalk: { secs: result.destWalk, fromName: stops[result.destStop].stop_name },
       legs,
     });
-    t = result.arrive + off + (k < places.length - 2 ? stayMins * 60 : 0);
+    t = result.arrive + off + (k < places.length - 2 ? stays[k] * 60 : 0);
   }
   return {
     ok: true,
     date: serviceDate,
-    stayMins: vias.length ? stayMins : 0,
+    stays, // minutes requested at each via
     segments,
     leaveAt: segments[0].leaveAt,
     arriveAt: segments.at(-1).arriveAt,

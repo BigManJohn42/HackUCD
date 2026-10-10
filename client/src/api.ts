@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import type { Corridor, RouteAlert } from "./types";
+import type { Corridor, RouteAlert, SubscriptionPlan } from "./types";
 import type { ChatMessage } from "./components/ChatWidget";
 
 async function asJson<T>(res: Response): Promise<T> {
@@ -17,15 +17,16 @@ export function fetchCorridor(): Promise<Corridor> {
 export interface JourneyQuery {
   from: string;
   to: string;
-  via?: string; // stopover place
-  stayMins?: number; // how long to stay at the stopover (server default 120)
+  stopovers?: { place: string; stayMins: number }[]; // in travel order
   depart?: string; // "HH:MM", default now
 }
 
-export function searchJourney({ from, to, via, stayMins, depart }: JourneyQuery): Promise<Corridor> {
+export function searchJourney({ from, to, stopovers = [], depart }: JourneyQuery): Promise<Corridor> {
   const params = new URLSearchParams({ from, to });
-  if (via) params.set("via", via);
-  if (via && stayMins !== undefined) params.set("stay", String(stayMins));
+  for (const s of stopovers) {
+    params.append("via", s.place);
+    params.append("stay", String(s.stayMins));
+  }
   if (depart) params.set("depart", depart);
   return fetch(`/api/plan?${params.toString()}`).then((r) => asJson<Corridor>(r));
 }
@@ -65,8 +66,12 @@ export function fetchBillingStatus(): Promise<{ isPro: boolean }> {
   return fetch("/api/billing/status").then((r) => asJson(r));
 }
 
-export function startCheckout(): Promise<{ url: string }> {
-  return fetch("/api/billing/create-checkout-session", { method: "POST" }).then((r) =>
+export function startCheckout(plan: SubscriptionPlan = "monthly"): Promise<{ url: string }> {
+  return fetch("/api/billing/create-checkout-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan }),
+  }).then((r) =>
     asJson(r)
   );
 }

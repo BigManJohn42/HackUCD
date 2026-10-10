@@ -81,7 +81,8 @@ Plans across buses, trains and Luas using the timetable (`npm run gtfs:update` f
 
 - `npm run plan ucd heuston`
 - `npm run plan ucd galway via athlone` — 2 hour stopover in Athlone (default)
-- `npm run plan ucd galway via athlone stay 90` — custom stopover in minutes; `via` can repeat
+- `npm run plan ucd galway via athlone stay 90` — custom stopover in minutes
+- `npm run plan ucd cork via kildare stay 60 via limerick junction stay 30` — several stopovers, each with its own stay
 - `npm run plan ucd dublin airport depart 08:30 date 2026-10-12`
 - Add `json` for the raw result (for the frontend).
 

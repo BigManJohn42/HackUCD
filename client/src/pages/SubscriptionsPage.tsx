@@ -1,3 +1,10 @@
+import type { SubscriptionPlan } from "../types";
+
+const PLANS: { id: SubscriptionPlan; label: string; price: string; period: string }[] = [
+  { id: "monthly", label: "Monthly", price: "2.99", period: "month" },
+  { id: "yearly", label: "Yearly", price: "24.99", period: "year" },
+];
+
 const BENEFITS = [
   "Unlimited saved itineraries",
   "Richer, more detailed AI break recommendations",
@@ -10,37 +17,46 @@ export function SubscriptionsPage({
   onUpgrade,
 }: {
   isPro: boolean;
-  upgrading: boolean;
-  onUpgrade: () => void;
+  upgrading: SubscriptionPlan | null;
+  onUpgrade: (plan: SubscriptionPlan) => void;
 }) {
   return (
     <section>
       <div className="page-heading">
         <span className="eyebrow">Explore the plans</span>
         <h1>A plan for your routine.</h1>
-        <p>One straightforward plan - no tiers to compare, no surprise charges.</p>
+        <p>The same Pro benefits, with monthly or yearly billing. Save when you subscribe yearly.</p>
       </div>
 
       <div className="plans-grid">
-        <article className="card plan-card">
-          <span className="eyebrow">Monthly</span>
-          <h2>ÉirGo Pro</h2>
-          <p className="price">
-            &euro;2.99<span> / month</span>
-          </p>
-          <ul className="benefits">
-            {BENEFITS.map((b) => (
-              <li key={b}>{b}</li>
-            ))}
-          </ul>
-          {isPro ? (
-            <span className="pro-badge">You're subscribed</span>
-          ) : (
-            <button type="button" className="btn-primary" onClick={onUpgrade} disabled={upgrading}>
-              {upgrading ? "Redirecting..." : "Subscribe"}
-            </button>
-          )}
-        </article>
+        {PLANS.map((plan) => (
+          <article key={plan.id} className={`card plan-card${plan.id === "yearly" ? " plan-card-yearly" : ""}`}>
+            <div className="plan-card-heading">
+              <span className="eyebrow">{plan.label}</span>
+              {plan.id === "yearly" && <span className="plan-savings-badge">Save 30%</span>}
+            </div>
+            <h2>ÉirGo Pro</h2>
+            <p className="price">
+              &euro;{plan.price}<span> / {plan.period}</span>
+            </p>
+            <p className="plan-billing">{plan.id === "yearly" ? "Billed annually" : "Billed monthly"}</p>
+            {plan.id === "yearly" && (
+              <p className="plan-savings">Save &euro;10.89 a year compared with monthly.</p>
+            )}
+            <ul className="benefits">
+              {BENEFITS.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+            {isPro ? (
+              <span className="pro-badge">You're subscribed</span>
+            ) : (
+              <button type="button" className="btn-primary" onClick={() => onUpgrade(plan.id)} disabled={upgrading !== null} aria-label={`Subscribe ${plan.label.toLowerCase()}`}>
+                {upgrading === plan.id ? "Redirecting..." : "Subscribe"}
+              </button>
+            )}
+          </article>
+        ))}
       </div>
       <p className="leg-meta">
         Payments run through Stripe's sandbox for this prototype - test card 4242 4242 4242
