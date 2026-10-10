@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "delays": "node --env-file=.env scripts/delays.js"
+    "delays": "node --env-file-if-exists=.env scripts/delays.js",
+    "gtfs:update": "node --env-file-if-exists=.env scripts/gtfs-update.js",
+    "stops": "node scripts/stops.js"
   },
   "repository": {
     "type": "git",
@@ -20,6 +22,8 @@
   "homepage": "https://github.com/BigManJohn42/HackUCD#readme",
   "type": "module",
   "dependencies": {
-    "gtfs-realtime-bindings": "^2.2.0"
+    "csv-parse": "^7.0.3",
+    "gtfs-realtime-bindings": "^2.2.0",
+    "yauzl": "^3.4.0"
   }
 }
