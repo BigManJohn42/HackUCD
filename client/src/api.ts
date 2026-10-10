@@ -13,6 +13,19 @@ export function fetchCorridor(): Promise<Corridor> {
   return fetch("/api/corridor").then((r) => asJson<Corridor>(r));
 }
 
+export function searchJourney(from: string, to: string, depart?: string): Promise<Corridor> {
+  const params = new URLSearchParams({ from, to });
+  if (depart) params.set("depart", depart);
+  return fetch(`/api/plan?${params.toString()}`).then((r) => asJson<Corridor>(r));
+}
+
+export function searchPlaces(query: string): Promise<string[]> {
+  if (query.trim().length < 2) return Promise.resolve([]);
+  return fetch(`/api/places?q=${encodeURIComponent(query.trim())}`)
+    .then((r) => asJson<{ places: string[] }>(r))
+    .then((r) => r.places);
+}
+
 export function askConcierge(
   message: string,
   context: Record<string, unknown>

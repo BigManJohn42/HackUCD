@@ -16,6 +16,14 @@
   font-size: 18px;
 }
 
+:root[data-font="small"] {
+  font-size: 16px;
+}
+
+:root[data-font="large"] {
+  font-size: 21px;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -44,17 +52,191 @@ input:focus-visible {
 .app {
   max-width: 920px;
   margin: 0 auto;
-  padding: 24px 16px 80px;
+  padding: 0 16px 80px;
 }
 
-.app-header h1 {
-  font-size: 1.9rem;
-  margin: 0 0 4px;
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 18px 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.app-header p {
+.site-header .brand {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-primary-dark);
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-right: auto;
+}
+
+.site-header nav a {
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: 600;
+  padding-bottom: 2px;
+}
+
+.site-header nav a[aria-current="page"] {
+  color: var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
+}
+
+.font-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
   color: var(--color-text-muted);
-  margin: 0 0 24px;
+}
+
+.font-control select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  font-size: 0.95rem;
+}
+
+.app-main {
+  min-height: 40vh;
+}
+
+.page-heading {
+  margin-bottom: 20px;
+}
+
+.page-heading .eyebrow {
+  display: block;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.page-heading h1 {
+  margin: 0 0 8px;
+  font-size: 1.8rem;
+}
+
+.page-heading p {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.hero {
+  padding: 32px 0 28px;
+  max-width: 640px;
+}
+
+.hero .eyebrow {
+  display: block;
+  color: var(--color-primary);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.hero h1 {
+  font-size: 2.3rem;
+  line-height: 1.2;
+  margin: 0 0 14px;
+}
+
+.hero p {
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.home-card {
+  display: block;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 22px;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.home-card:hover {
+  border-color: var(--color-primary);
+}
+
+.home-card .card-number {
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.home-card h2 {
+  margin: 8px 0;
+  font-size: 1.2rem;
+}
+
+.home-card p {
+  color: var(--color-text-muted);
+  margin: 0 0 14px;
+}
+
+.home-card .card-action {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+  gap: 16px;
+}
+
+.plan-card .price {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 8px 0 14px;
+}
+
+.plan-card .price span {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.plan-card .benefits {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+}
+
+.plan-card .benefits li {
+  padding: 6px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.site-footer {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 24px 0;
+  margin-top: 24px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
 }
 
 .card {
@@ -297,6 +479,20 @@ input:focus-visible {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.journey-search label {
+  display: block;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+
+.journey-search input {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
 }
 
 .map-controls {

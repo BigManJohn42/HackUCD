@@ -1,4 +1,6 @@
 import "dotenv/config";
+import dotenv from "dotenv";
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import { createServer } from "http";
@@ -6,7 +8,13 @@ import { Server } from "socket.io";
 import { itineraryRouter } from "./routes/itinerary.js";
 import { chatRouter } from "./routes/chat.js";
 import { billingRouter } from "./routes/billing.js";
+import { planRouter } from "./routes/plan.js";
 import { startLiveFeed } from "./services/liveFeed.js";
+
+// NTA_API_KEY and GTFS_FEED live in the repo-root .env (shared with the
+// standalone `npm run delays`/`plan` scripts there) rather than server/.env;
+// load it as a fallback without overriding anything server/.env already set.
+dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
@@ -18,6 +26,7 @@ app.use(express.json());
 app.use("/api", itineraryRouter);
 app.use("/api", chatRouter);
 app.use("/api", billingRouter);
+app.use("/api", planRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

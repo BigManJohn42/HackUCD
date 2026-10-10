@@ -1,12 +1,16 @@
 # ÉirGo
 
-Editable, step-by-step commute planner for one real Dublin corridor (UCD Belfield -> city
-centre via Dundrum), with live disruption alerts over WebSocket and an AI concierge
-(OpenRouter) that gives break-time recommendations at each transfer.
+Editable, step-by-step commute planner. Four pages (Home / Manual Planner / Smart
+Planner / Subscriptions): search any real Dublin stop-to-stop journey and get a fully
+editable itinerary (swap the mode per leg, insert a break and get an AI suggestion for
+what to do), or use a guaranteed-working hardcoded sample route. Live disruption alerts
+over WebSocket, an AI concierge (OpenRouter), and a real Stripe sandbox subscription.
 
 ## Setup
 
 ```bash
+npm install                              # repo root - real transit data/planner
+npm run gtfs:update                      # downloads + indexes the full timetable (~5 min, ~165 MB)
 cd server && npm install && cp .env.example .env
 cd ../client && npm install
 ```
@@ -16,6 +20,12 @@ Fill in `server/.env`:
   reply if left blank, so the rest of the app still runs without it)
 - `STRIPE_SECRET_KEY` — a **test mode** secret key from
   https://dashboard.stripe.com/test/apikeys (needed only for the Pro upgrade flow)
+
+Fill in the repo-root `.env` (copy `.env.example`):
+- `GTFS_FEED=GTFS_Realtime` — the full Dublin-wide feed (the default, `GTFS_Irish_Rail`,
+  is a small rail-only feed meant for quick testing and won't have most bus/Luas stops)
+- `NTA_API_KEY` — https://developer.nationaltransport.ie (optional; without it, live
+  delay alerts fall back to the simulated feed, same pattern as the OpenRouter key)
 
 ## Run
 
@@ -30,12 +40,18 @@ Open http://localhost:5173.
 
 ## What's real vs. mocked
 
-- **Route data**: hand-entered from NTA's published Dublin Bus/Luas schedules for one
-  corridor — not a general router. See `server/src/data/corridor.ts`.
-- **Live alerts**: simulated in `server/src/services/liveFeed.ts` on the same polling
-  interval a real NTA GTFS-Realtime integration would use. Swap the body of `pollOnce`
-  for a real fetch against the GTFS-RT feed; the Socket.IO relay and UI don't need to
-  change.
+- **Manual/Smart Planner search**: a real journey, computed by the Connection Scan
+  planner in `src/planner.js` against the downloaded GTFS timetable, converted to this
+  app's editable-leg shape by `server/src/services/plannerBridge.ts`. Real searched
+  routes only ever have one option per leg (the planner returns one best route, not
+  alternatives) — the "Try the sample UCD route" button loads the hand-curated demo
+  corridor instead, which does have 2-3 alternatives per leg to demonstrate mode-swapping
+  and the fastest/fewest-transfers/cheapest preference toggle.
+- **Sample route data**: hand-entered from NTA's published schedules for one corridor
+  (UCD Belfield -> city centre via Dundrum). See `server/src/data/corridor.ts`.
+- **Live alerts**: real NTA GTFS-Realtime delay/cancellation events
+  (`server/src/services/liveFeed.ts` via `src/nta.js`) when `NTA_API_KEY` is set;
+  otherwise a simulated feed on the same polling cadence.
 - **AI concierge**: a real OpenRouter call (`server/src/services/openrouter.ts`).
 - **Stripe**: a real sandbox Checkout Session (subscription, test price) — use card
   `4242 4242 4242 4242`, any future expiry/CVC.

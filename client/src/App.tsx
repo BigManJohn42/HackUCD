@@ -4,22 +4,37 @@ import {
   confirmCheckout,
   fetchBillingStatus,
   fetchCorridor,
+  searchJourney,
   startCheckout,
   subscribeToAlerts,
 } from "./api";
-import { AlertBanner } from "./components/AlertBanner";
-import { ChatPanel } from "./components/ChatPanel";
-import { ItineraryStep } from "./components/ItineraryStep";
-import { PreferenceToggle } from "./components/PreferenceToggle";
-import { ProBanner } from "./components/ProBanner";
-import { RouteMap } from "./components/RouteMap";
 import {
   getNotificationPermission,
   notifyRouteAlert,
   requestNotificationPermission,
   type NotificationPermissionState,
 } from "./notifications";
+import { HomePage } from "./pages/HomePage";
+import { ManualPlannerPage } from "./pages/ManualPlannerPage";
+import { SmartPlannerPage } from "./pages/SmartPlannerPage";
+import { SubscriptionsPage } from "./pages/SubscriptionsPage";
 import type { ChatMessage, Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
+
+const PAGES = ["home", "manual", "smart", "subscriptions"] as const;
+type Page = (typeof PAGES)[number];
+const PAGE_LABEL: Record<Page, string> = {
+  home: "Home",
+  manual: "Manual Planner",
+  smart: "Smart Planner",
+  subscriptions: "Subscriptions",
+};
+
+function currentPage(): Page {
+  const value = window.location.hash.replace(/^#\/?/, "");
+  return (PAGES as readonly string[]).includes(value) ? (value as Page) : "home";
+}
+
+type FontSize = "small" | "standard" | "large";
 
 const TRANSIT_MODES = new Set(["bus", "luas", "rail"]);
 
@@ -41,10 +56,23 @@ function defaultSelections(corridor: Corridor, preference: Preference): Record<s
 }
 
 export default function App() {
+  const [page, setPage] = useState<Page>(currentPage);
+  const [font, setFont] = useState<FontSize>(() => {
+    try {
+      const saved = localStorage.getItem("eirgo-font");
+      return saved === "small" || saved === "large" ? saved : "standard";
+    } catch {
+      return "standard";
+    }
+  });
+
   const [corridor, setCorridor] = useState<Corridor | null>(null);
   const [preference, setPreference] = useState<Preference>("fastest");
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [openBreaks, setOpenBreaks] = useState<Record<string, boolean>>({});
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isPro, setIsPro] = useState(false);
@@ -54,12 +82,31 @@ export default function App() {
   const [myLocationEnabled, setMyLocationEnabled] = useState(false);
 
   useEffect(() => {
+    const onHashChange = () => setPage(currentPage());
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    document.title = `${PAGE_LABEL[page]} · ÉirGo`;
+  }, [page]);
+
+  useEffect(() => {
+    document.documentElement.dataset.font = font;
+    try {
+      localStorage.setItem("eirgo-font", font);
+    } catch {
+      /* font choice just won't persist across visits */
+    }
+  }, [font]);
+
+  useEffect(() => {
     fetchCorridor()
       .then((c) => {
         setCorridor(c);
         setSelections(defaultSelections(c, "fastest"));
       })
-      .catch(() => setLoadError("Could not load the route. Is the server running on port 4000?"));
+      .catch(() => setLoadError("Could not load a route. Is the server running on port 4000?"));
 
     fetchBillingStatus()
       .then((s) => setIsPro(s.isPro))
@@ -77,7 +124,7 @@ export default function App() {
     if (params.get("checkout") === "success" && sessionId) {
       confirmCheckout(sessionId)
         .then((r) => setIsPro(r.isPro))
-        .finally(() => window.history.replaceState({}, "", window.location.pathname));
+        .finally(() => window.history.replaceState({}, "", window.location.pathname + window.location.hash));
     }
 
     return unsubscribe;
@@ -129,6 +176,38 @@ export default function App() {
     }
   }
 
+  async function handleSearch(from: string, to: string) {
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const c = await searchJourney(from, to);
+      setCorridor(c);
+      setPreference("fastest");
+      setSelections(defaultSelections(c, "fastest"));
+      setOpenBreaks({});
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Could not plan that journey.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function handleLoadSample() {
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const c = await fetchCorridor();
+      setCorridor(c);
+      setPreference("fastest");
+      setSelections(defaultSelections(c, "fastest"));
+      setOpenBreaks({});
+    } catch {
+      setSearchError("Could not load the sample route.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
   async function handleEnableNotifications() {
     const result = await requestNotificationPermission();
     setNotifPermission(result);
@@ -159,83 +238,70 @@ export default function App() {
     return { durationMin, costEuro, co2Kg };
   }, [corridor, selections]);
 
-  if (loadError) {
-    return (
-      <div className="app">
-        <p role="alert">{loadError}</p>
-      </div>
-    );
-  }
-
-  if (!corridor) {
-    return (
-      <div className="app">
-        <p>Loading your route...</p>
-      </div>
-    );
-  }
+  const plannerProps = {
+    corridor,
+    preference,
+    onPreferenceChange: handlePreferenceChange,
+    selections,
+    onSelectOption: handleSelectOption,
+    openBreaks,
+    onToggleBreak: handleToggleBreak,
+    onGetBreakSuggestion: handleGetBreakSuggestion,
+    alerts,
+    onDismissAlert: (index: number) => setAlerts((prev) => prev.filter((_, i) => i !== index)),
+    myLocationEnabled,
+    onToggleMyLocation: () => setMyLocationEnabled((v) => !v),
+    notifPermission,
+    onEnableNotifications: handleEnableNotifications,
+    searching,
+    searchError,
+    onSearch: handleSearch,
+    onLoadSample: handleLoadSample,
+    totals,
+  };
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>ÉirGo</h1>
-        <p>{corridor.name}</p>
+      <header className="site-header">
+        <a href="#/home" className="brand">
+          ÉirGo
+        </a>
+        <nav aria-label="Main navigation">
+          {PAGES.map((p) => (
+            <a key={p} href={`#/${p}`} aria-current={page === p ? "page" : undefined}>
+              {PAGE_LABEL[p]}
+            </a>
+          ))}
+        </nav>
+        <div className="font-control">
+          <label htmlFor="font-size">Text size</label>
+          <select id="font-size" value={font} onChange={(e) => setFont(e.target.value as FontSize)}>
+            <option value="small">Small</option>
+            <option value="standard">Standard</option>
+            <option value="large">Large</option>
+          </select>
+        </div>
       </header>
 
-      {alerts.map((alert, i) => (
-        <AlertBanner
-          key={`${alert.timestamp}-${i}`}
-          alert={alert}
-          onDismiss={() => setAlerts((prev) => prev.filter((_, idx) => idx !== i))}
-        />
-      ))}
-
-      <ProBanner isPro={isPro} upgrading={upgrading} onUpgrade={handleUpgrade} />
-
-      <PreferenceToggle value={preference} onChange={handlePreferenceChange} />
-
-      <div className="card">
-        {totals && (
-          <div className="summary-bar">
-            <div><span>Total time</span>{totals.durationMin} min</div>
-            <div><span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}</div>
-            <div><span>CO2</span>{totals.co2Kg.toFixed(1)} kg</div>
-          </div>
+      <main className="app-main">
+        {loadError && (
+          <p role="alert" className="card">
+            {loadError}
+          </p>
         )}
-      </div>
 
-      <RouteMap corridor={corridor} selections={selections} myLocationEnabled={myLocationEnabled} />
-
-      <div className="card map-controls">
-        <button type="button" className="btn-secondary" onClick={() => setMyLocationEnabled((v) => !v)}>
-          {myLocationEnabled ? "Hide my location" : "Show my location on map"}
-        </button>
-        {notifPermission === "granted" ? (
-          <span className="notif-status">Delay notifications are on</span>
-        ) : notifPermission === "denied" ? (
-          <span className="notif-status">Notifications blocked - enable them in your browser's site settings</span>
-        ) : notifPermission === "unsupported" ? null : (
-          <button type="button" className="btn-secondary" onClick={handleEnableNotifications}>
-            Enable delay notifications
-          </button>
+        {page === "home" && <HomePage />}
+        {page === "manual" && <ManualPlannerPage {...plannerProps} />}
+        {page === "smart" && <SmartPlannerPage {...plannerProps} messages={messages} onSend={handleSendChat} />}
+        {page === "subscriptions" && (
+          <SubscriptionsPage isPro={isPro} upgrading={upgrading} onUpgrade={handleUpgrade} />
         )}
-      </div>
+      </main>
 
-      <div className="card">
-        {corridor.legs.map((leg) => (
-          <ItineraryStep
-            key={leg.id}
-            leg={leg}
-            selectedOptionId={selections[leg.id]}
-            onSelectOption={(optionId) => handleSelectOption(leg.id, optionId)}
-            breakOpen={!!openBreaks[leg.id]}
-            onToggleBreak={() => handleToggleBreak(leg.id)}
-            onGetBreakSuggestion={(minutes) => handleGetBreakSuggestion(leg, minutes)}
-          />
-        ))}
-      </div>
-
-      <ChatPanel messages={messages} onSend={handleSendChat} />
+      <footer className="site-footer">
+        <span>ÉirGo</span>
+        <span>A clearer journey, one step at a time.</span>
+      </footer>
     </div>
   );
 }
