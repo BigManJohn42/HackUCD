@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import type { Corridor, RouteAlert, SubscriptionPlan } from "./types";
+import type { Corridor, RouteAlert, SubscriptionPlan, WatchedLeg } from "./types";
 import type { ChatMessage } from "./components/ChatWidget";
 
 async function asJson<T>(res: Response): Promise<T> {
@@ -100,16 +100,40 @@ export function subscribeToAlerts(onAlert: (alert: RouteAlert) => void): () => v
 export function watchJourney(corridor: Corridor | null) {
   const s = getSocket();
   if (!corridor) {
-    s.emit("watch-journey", { optionIds: [], tripIds: [] });
+    s.emit("watch-journey", { optionIds: [], tripIds: [], legs: [] });
     return;
   }
   const optionIds: string[] = [];
   const tripIds: string[] = [];
+  const legs: WatchedLeg[] = [];
   for (const leg of corridor.legs) {
     for (const option of leg.options) {
       optionIds.push(option.id);
-      if (option.tripId) tripIds.push(option.tripId);
+      if (!option.tripId) continue;
+      tripIds.push(option.tripId);
+      // Rides you've already got off are history - no point alerting about them.
+      if (option.arriveAt && hasPassed(option.arriveAt)) continue;
+      legs.push({
+        legId: leg.id,
+        optionId: option.id,
+        tripId: option.tripId,
+        label: option.label,
+        fromName: leg.from,
+        boardStopCode: option.fromStopCode ?? null,
+        boardAt: option.boardAt ?? null,
+        knownStatus: option.live?.status ?? "scheduled",
+        knownDelayMin: option.live?.delayMin ?? 0,
+      });
     }
   }
-  s.emit("watch-journey", { optionIds, tripIds });
+  s.emit("watch-journey", { optionIds, tripIds, legs });
+}
+
+/** True if an "HH:MM" (optionally "(+1 day)") plan time is already more than 5 min ago today. */
+function hasPassed(hhmm: string): boolean {
+  if (hhmm.includes("+")) return false;
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return false;
+  const now = new Date();
+  return Number(m[1]) * 60 + Number(m[2]) < now.getHours() * 60 + now.getMinutes() - 5;
 }

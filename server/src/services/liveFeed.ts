@@ -1,23 +1,23 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Server, Socket } from "socket.io";
 import { belfieldToCityCentre } from "../data/corridor.js";
-import type { RouteAlert } from "../types.js";
+import type { AlertKind, LiveStatus, RouteAlert, WatchedLeg } from "../types.js";
 import { getTripUpdates } from "../../../src/nta.js";
-import { DB_PATH } from "../../../src/timetable.js";
+import { DB_PATH, findStops } from "../../../src/timetable.js";
+import { liveStatusFor, type TripUpdateRow } from "./plannerBridge.js";
 
 const POLL_INTERVAL_MS = 25_000;
-const DELAY_THRESHOLD_SECS = 300; // only surface delays of 5+ minutes
+const LATE_MIN = 5; // a delay worth telling someone about
+const CHANGE_MIN = 5; // re-alert only when the delay moves by at least this much
 const LUAS_ROUTE_TYPE = 0; // GTFS route_type: 0 = tram/Luas
-
-const emittedRecently = new Set<string>();
 
 let db: DatabaseSync | null = null;
 const routeTypeCache = new Map<string, number | null>();
 
 /** Luas's live feed matches delays to the wrong scheduled trips (often "early" by
- * an hour), so - like the per-leg badges in plannerBridge.ts - the general alert
- * ticker ignores it too, rather than show confidently wrong disruption banners. */
-function isLuasRoute(routeId: string | null): boolean {
+ * an hour), so - like the per-leg badges in plannerBridge.ts - alerts ignore it too,
+ * rather than show confidently wrong disruption banners. */
+function isLuasRoute(routeId: string | null | undefined): boolean {
   if (!routeId) return false;
   if (routeTypeCache.has(routeId)) return routeTypeCache.get(routeId) === LUAS_ROUTE_TYPE;
   try {
@@ -32,54 +32,114 @@ function isLuasRoute(routeId: string | null): boolean {
   }
 }
 
-interface ScopedAlert extends RouteAlert {
-  tripId: string;
+const stopIdCache = new Map<string, string | undefined>();
+function stopIdForCode(code: string | null): string | undefined {
+  if (!code) return undefined;
+  if (!stopIdCache.has(code)) stopIdCache.set(code, findStops(code)[0]?.stop_id);
+  return stopIdCache.get(code);
 }
 
-interface TripUpdateRow {
-  tripId: string | null;
-  routeId: string | null;
-  tripStatus: string;
-  stopId: string | null;
-  stopStatus?: string;
-  delay: number | null;
+/** "14:02" + 11 -> "14:13" (ignores any "(+1 day)" suffix). */
+function addMinutes(hhmm: string | null, mins: number): string | null {
+  const m = hhmm?.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const total = (Number(m[1]) * 60 + Number(m[2]) + mins + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-// Real delays/cancellations from NTA's live GTFS-Realtime feed (Dublin Bus,
-// Bus Eireann, Go-Ahead). Requires NTA_API_KEY in .env; falls back to the
-// simulated feed below when it isn't set, same pattern as the OpenRouter and
-// Stripe integrations elsewhere in this app.
-async function pollRealFeed(): Promise<ScopedAlert[]> {
-  const { rows } = (await getTripUpdates()) as { rows: TripUpdateRow[] };
-  const alerts: ScopedAlert[] = [];
+interface TripState {
+  status: LiveStatus["status"];
+  delayMin: number;
+}
 
-  for (const row of rows) {
-    if (isLuasRoute(row.routeId)) continue;
-    const isCancelled = row.tripStatus === "CANCELED" || row.stopStatus === "SKIPPED";
-    const isLate = typeof row.delay === "number" && row.delay >= DELAY_THRESHOLD_SECS;
-    if (!isCancelled && !isLate) continue;
-    if (!row.tripId) continue;
+const isLate = (s: TripState) => s.status === "late" && s.delayMin >= LATE_MIN;
 
-    const dedupeKey = `${row.tripId}-${row.stopId ?? "trip"}-${isCancelled ? "cancelled" : "late"}`;
-    if (emittedRecently.has(dedupeKey)) continue;
-    emittedRecently.add(dedupeKey);
+/**
+ * Decide whether a trip's live status has changed enough since the user last
+ * heard about it (the plan itself, or the previous alert) to be worth an alert.
+ */
+function decide(prev: TripState, now: TripState, leg: WatchedLeg): RouteAlert | null {
+  const ride = leg.boardAt ? `the ${leg.boardAt} ${leg.label}` : leg.label;
+  const where = leg.fromName ? ` from ${leg.fromName}` : "";
+  const make = (kind: AlertKind, severity: RouteAlert["severity"], title: string, message: string): RouteAlert => ({
+    id: `${leg.tripId}-${kind}-${now.delayMin}-${Date.now()}`,
+    legId: leg.legId,
+    optionId: leg.optionId,
+    tripId: leg.tripId,
+    kind,
+    severity,
+    title,
+    message,
+    delayMin: now.delayMin,
+    timestamp: new Date().toISOString(),
+  });
+  const shortLabel = leg.label.split(" towards ")[0];
 
-    const routeLabel = row.routeId ? `Route ${row.routeId}` : "A service";
-    alerts.push({
-      legId: "",
-      optionId: row.tripId,
-      tripId: row.tripId,
-      severity: isCancelled ? "critical" : "warning",
-      message: isCancelled
-        ? `${routeLabel} has a cancelled stop on its current trip.`
-        : `${routeLabel} is running about ${Math.round((row.delay as number) / 60)} min late.`,
-      timestamp: new Date().toISOString(),
-    });
+  if (now.status === "cancelled" && prev.status !== "cancelled") {
+    return make("cancelled", "critical", `${shortLabel} cancelled`, `${capitalise(ride)}${where} has been cancelled.`);
   }
+  if (now.status === "skipped" && prev.status !== "skipped") {
+    return make("skipped", "critical", `${shortLabel} won't stop for you`, `${capitalise(ride)} is not stopping at ${leg.fromName}.`);
+  }
+  if (now.status === "cancelled" || now.status === "skipped") return null;
 
-  // Keep the dedupe set from growing forever across a long-running demo.
-  if (emittedRecently.size > 500) emittedRecently.clear();
+  const expected = addMinutes(leg.boardAt, now.delayMin);
+  const expectedText = expected ? ` - expected around ${expected}` : "";
+  if (isLate(now)) {
+    if (!isLate(prev)) {
+      return make("late", "warning", `${shortLabel} is ${now.delayMin} min late`, `${capitalise(ride)}${where} is running ${now.delayMin} min late${expectedText}.`);
+    }
+    if (now.delayMin - prev.delayMin >= CHANGE_MIN) {
+      return make("worse", "warning", `${shortLabel} delay now ${now.delayMin} min`, `${capitalise(ride)} has slipped further: now ${now.delayMin} min late${expectedText}.`);
+    }
+    if (prev.delayMin - now.delayMin >= CHANGE_MIN) {
+      return make("improved", "info", `${shortLabel} catching up`, `${capitalise(ride)} is now only ${now.delayMin} min late${expectedText}.`);
+    }
+    return null;
+  }
+  if (isLate(prev) || prev.status === "cancelled" || prev.status === "skipped") {
+    return make("recovered", "info", `${shortLabel} back on schedule`, `${capitalise(ride)} is running on time again.`);
+  }
+  return null;
+}
 
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Real delays/cancellations from NTA's live GTFS-Realtime feed, per watched trip. */
+async function pollRealFeed(): Promise<Map<string, TripUpdateRow[]>> {
+  const { rows } = (await getTripUpdates()) as { rows: (TripUpdateRow & { routeId?: string | null })[] };
+  const byTrip = new Map<string, TripUpdateRow[]>();
+  for (const row of rows) {
+    if (!row.tripId || isLuasRoute(row.routeId)) continue;
+    if (!byTrip.has(row.tripId)) byTrip.set(row.tripId, []);
+    byTrip.get(row.tripId)!.push(row);
+  }
+  return byTrip;
+}
+
+function alertsForSocket(socket: Socket, byTrip: Map<string, TripUpdateRow[]>): RouteAlert[] {
+  const legs = (socket.data.watchedLegs as WatchedLeg[] | undefined) ?? [];
+  // Last status the user knows about, per trip: starts from what their plan showed.
+  const known = ((socket.data.tripStates as Map<string, TripState> | undefined) ??= new Map());
+  const alerts: RouteAlert[] = [];
+
+  for (const leg of legs) {
+    const updates = byTrip.get(leg.tripId);
+    if (!updates) continue; // not running yet / no live data: nothing new to say
+    const live = liveStatusFor(updates, stopIdForCode(leg.boardStopCode));
+    if (live.status === "scheduled") continue;
+
+    const now: TripState = { status: live.status, delayMin: live.delayMin ?? 0 };
+    const prev: TripState = known.get(leg.tripId) ?? {
+      status: leg.knownStatus as LiveStatus["status"],
+      delayMin: leg.knownDelayMin,
+    };
+    const alert = decide(prev, now, leg);
+    // Remember what was last *told* to the user (not every small drift), so a delay
+    // creeping 5 -> 6 -> 7 ... -> 10 still triggers a "worse" alert eventually.
+    if (alert || !known.has(leg.tripId)) known.set(leg.tripId, alert ? now : prev);
+    if (alert) alerts.push(alert);
+  }
   return alerts;
 }
 
@@ -97,40 +157,35 @@ function simulateOnce(): RouteAlert | null {
 
   const leg = legsWithTransit[Math.floor(Math.random() * legsWithTransit.length)];
   const option = leg.options.find((o) => o.departures.length > 0)!;
+  const base = { id: `sim-${Date.now()}`, legId: leg.id, optionId: option.id, timestamp: new Date().toISOString() };
 
   const kind = Math.random();
   if (kind < 0.6) {
     const delay = 5 + Math.floor(Math.random() * 10);
     return {
-      legId: leg.id,
-      optionId: option.id,
+      ...base,
+      kind: "late",
       severity: "warning",
+      title: `${option.label} is ${delay} min late`,
       message: `${option.label} is running about ${delay} min late.`,
-      timestamp: new Date().toISOString(),
+      delayMin: delay,
     };
   }
   if (kind < 0.85) {
     return {
-      legId: leg.id,
-      optionId: option.id,
+      ...base,
+      kind: "cancelled",
       severity: "critical",
+      title: `${option.label} cancelled`,
       message: `${option.label} at ${option.departures[0]} has been cancelled.`,
-      timestamp: new Date().toISOString(),
     };
   }
   return {
-    legId: leg.id,
-    optionId: option.id,
+    ...base,
+    kind: "recovered",
     severity: "info",
+    title: `${option.label} back on schedule`,
     message: `${option.label} is back on schedule.`,
-    timestamp: new Date().toISOString(),
-  };
-}
-
-function watchedSets(socket: Socket): { optionIds: Set<string>; tripIds: Set<string> } {
-  return {
-    optionIds: (socket.data.watchedOptionIds as Set<string> | undefined) ?? new Set(),
-    tripIds: (socket.data.watchedTripIds as Set<string> | undefined) ?? new Set(),
   };
 }
 
@@ -144,16 +199,15 @@ export function startLiveFeed(io: Server) {
     if (sockets.length === 0) return;
 
     if (useRealFeed) {
+      const watching = sockets.filter((s) => ((s.data.watchedLegs as WatchedLeg[] | undefined) ?? []).length > 0);
+      if (watching.length === 0) return; // don't spend the 1 call/min budget when nobody's journey has rides
       try {
-        const alerts = await pollRealFeed();
-        if (alerts.length === 0) return;
-        for (const socket of sockets) {
-          const { tripIds } = watchedSets(socket);
-          const relevant = alerts.filter((a) => tripIds.has(a.tripId)).slice(0, 3);
-          relevant.forEach((alert) => socket.emit("route-alert", alert));
+        const byTrip = await pollRealFeed();
+        for (const socket of watching) {
+          alertsForSocket(socket, byTrip).forEach((alert) => socket.emit("route-alert", alert));
         }
       } catch (err) {
-        console.error("[liveFeed] real feed poll failed:", err);
+        console.error("[liveFeed] real feed poll failed:", err instanceof Error ? err.message : err);
       }
       return;
     }
@@ -161,7 +215,7 @@ export function startLiveFeed(io: Server) {
     const alert = simulateOnce();
     if (!alert) return;
     for (const socket of sockets) {
-      const { optionIds } = watchedSets(socket);
+      const optionIds = (socket.data.watchedOptionIds as Set<string> | undefined) ?? new Set();
       if (optionIds.has(alert.optionId)) socket.emit("route-alert", alert);
     }
   }, POLL_INTERVAL_MS);

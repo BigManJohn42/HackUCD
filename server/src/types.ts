@@ -42,12 +42,36 @@ export interface Corridor {
   summary?: { leaveAt: string; arriveAt: string; durationMin: number; liveData: boolean };
 }
 
+/** What changed for a watched trip since the user last heard about it. */
+export type AlertKind = "late" | "worse" | "improved" | "recovered" | "cancelled" | "skipped";
+
 export interface RouteAlert {
   legId: string;
   optionId: string;
   severity: "info" | "warning" | "critical";
   message: string;
   timestamp: string;
+  // Real-journey alerts (live GTFS-R) carry structured details so the client can
+  // update the step's live badge and work out whether a connection is at risk.
+  id?: string;
+  tripId?: string;
+  kind?: AlertKind;
+  title?: string;
+  delayMin?: number;
+}
+
+/** One ride in the user's journey that the server should watch for live changes. */
+export interface WatchedLeg {
+  legId: string;
+  optionId: string;
+  tripId: string;
+  label: string; // e.g. "Bus 39A towards Ongar"
+  fromName: string;
+  boardStopCode: string | null;
+  boardAt: string | null; // "HH:MM"
+  // What the itinerary already shows, so we only alert on changes after planning.
+  knownStatus: string;
+  knownDelayMin: number;
 }
 
 export interface ChatContext {

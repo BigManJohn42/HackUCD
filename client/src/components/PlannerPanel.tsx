@@ -1,4 +1,4 @@
-import { AlertBanner } from "./AlertBanner";
+import { AlertToasts } from "./AlertToasts";
 import { ItineraryStep } from "./ItineraryStep";
 import { JourneySearchForm } from "./JourneySearchForm";
 import { PreferenceToggle } from "./PreferenceToggle";
@@ -17,7 +17,7 @@ export interface PlannerPanelProps {
   onToggleBreak: (legId: string) => void;
   onGetBreakSuggestion: (leg: Leg, minutes: number) => Promise<string>;
   alerts: RouteAlert[];
-  onDismissAlert: (index: number) => void;
+  onDismissAlert: (alert: RouteAlert) => void;
   myLocationEnabled: boolean;
   onToggleMyLocation: () => void;
   notifPermission: NotificationPermissionState;
@@ -56,9 +56,7 @@ export function PlannerPanel({
     <>
       <JourneySearchForm onSearch={onSearch} onLoadSample={onLoadSample} searching={searching} error={searchError} />
 
-      {alerts.map((alert, i) => (
-        <AlertBanner key={`${alert.timestamp}-${i}`} alert={alert} onDismiss={() => onDismissAlert(i)} />
-      ))}
+      <AlertToasts alerts={alerts} corridor={corridor} selections={selections} onDismiss={onDismissAlert} />
 
       {corridor && (
         <>

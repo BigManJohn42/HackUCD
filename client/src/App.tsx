@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { alertImpact, alertSubject, liveStatusFromAlert } from "./alertImpact";
 import {
   askConcierge,
   askConciergeChat,
@@ -74,6 +75,10 @@ function scoreOption(option: RouteOption, preference: Preference): number {
 function defaultSelections(corridor: Corridor, preference: Preference): Record<string, string> {
   const map: Record<string, string> = {};
   for (const leg of corridor.legs) {
+    if (corridor.summary && preference === "fastest") {
+      map[leg.id] = leg.options[0].id; // the planner's choice (alternatives come after it)
+      continue;
+    }
     const best = [...leg.options].sort((a, b) => scoreOption(a, preference) - scoreOption(b, preference))[0];
     map[leg.id] = best.id;
   }
@@ -106,6 +111,11 @@ export default function App() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
+  // The alert listener is registered once, so it reads the latest plan through refs.
+  const corridorRef = useRef<Corridor | null>(null);
+  const selectionsRef = useRef<Record<string, string>>({});
+  corridorRef.current = corridor;
+  selectionsRef.current = selections;
   const [isPro, setIsPro] = useState(false);
   const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -162,10 +172,71 @@ export default function App() {
 
     setNotifPermission(getNotificationPermission());
 
-    const unsubscribe = subscribeToAlerts((alert) => {
-      setAlerts((prev) => [alert, ...prev].slice(0, 5));
-      notifyRouteAlert(alert);
-    });
+    function handleAlert(alert: RouteAlert) {
+      // Did the user swap this step to walking/cycling? Then the delay doesn't affect them:
+      // update the badge below, but don't interrupt them with a toast or notification.
+      const leg = corridorRef.current?.legs.find((l) => l.id === alert.legId);
+      const selectedId = leg ? selectionsRef.current[leg.id] ?? leg.options[0]?.id : undefined;
+      const affectsPlan = !leg || selectedId === alert.optionId;
+
+      // One card per trip: a newer update replaces the older one instead of piling up.
+      if (affectsPlan) {
+        setAlerts((prev) => [alert, ...prev.filter((a) => alertSubject(a) !== alertSubject(alert))].slice(0, 5));
+      }
+
+      // Keep the step's live badge in sync with the latest news.
+      const live = liveStatusFromAlert(alert);
+      if (live && alert.tripId) {
+        setCorridor((c) =>
+          c && {
+            ...c,
+            legs: c.legs.map((l) => ({
+              ...l,
+              options: l.options.map((o) => (o.tripId === alert.tripId ? { ...o, live } : o)),
+            })),
+          }
+        );
+      }
+
+      if (affectsPlan) notifyRouteAlert(alert, alertImpact(corridorRef.current, selectionsRef.current, alert));
+    }
+    const unsubscribe = subscribeToAlerts(handleAlert);
+
+    // Dev/demo only: simulate a live delay on the current plan from the browser console,
+    // e.g. __eirgoDemoDelay(12) delays the first ride 12 min, __eirgoDemoDelay(0, 1, "cancelled").
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__eirgoDemoDelay = (
+        delayMin = 10,
+        rideIndex = 0,
+        kind: "late" | "cancelled" | "recovered" = "late"
+      ) => {
+        const rides = (corridorRef.current?.legs ?? []).flatMap((l) =>
+          l.options.filter((o) => o.tripId).map((o) => ({ leg: l, option: o }))
+        );
+        const ride = rides[rideIndex];
+        if (!ride) return "No live-tracked rides in the current plan - search a real journey first.";
+        const short = ride.option.label.split(" towards ")[0];
+        handleAlert({
+          id: `demo-${Date.now()}`,
+          legId: ride.leg.id,
+          optionId: ride.option.id,
+          tripId: ride.option.tripId,
+          kind,
+          delayMin: kind === "late" ? delayMin : 0,
+          severity: kind === "cancelled" ? "critical" : kind === "recovered" ? "info" : "warning",
+          title:
+            kind === "cancelled" ? `${short} cancelled` : kind === "recovered" ? `${short} back on schedule` : `${short} is ${delayMin} min late`,
+          message:
+            kind === "cancelled"
+              ? `The ${ride.option.boardAt} ${ride.option.label} from ${ride.leg.from} has been cancelled.`
+              : kind === "recovered"
+                ? `The ${ride.option.boardAt} ${ride.option.label} is running on time again.`
+                : `The ${ride.option.boardAt} ${ride.option.label} from ${ride.leg.from} is running ${delayMin} min late.`,
+          timestamp: new Date().toISOString(),
+        });
+        return `Simulated ${kind} on ${short}`;
+      };
+    }
 
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
@@ -308,7 +379,8 @@ export default function App() {
     onToggleBreak: handleToggleBreak,
     onGetBreakSuggestion: handleGetBreakSuggestion,
     alerts,
-    onDismissAlert: (index: number) => setAlerts((prev) => prev.filter((_, i) => i !== index)),
+    onDismissAlert: (alert: RouteAlert) =>
+      setAlerts((prev) => prev.filter((a) => alertSubject(a) !== alertSubject(alert))),
     myLocationEnabled,
     onToggleMyLocation: () => setMyLocationEnabled((v) => !v),
     notifPermission,
