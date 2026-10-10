@@ -715,6 +715,8 @@ input::placeholder {
 }
 .journey-search .add-stopover {
   margin-top: 12px;
+}
+
 .chat-widget {
   position: fixed;
   width: min(360px, calc(100% - 32px));
