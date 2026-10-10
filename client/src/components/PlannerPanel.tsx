@@ -5,6 +5,7 @@ import { PreferenceToggle } from "./PreferenceToggle";
 import { RouteMap } from "./RouteMap";
 import type { Corridor, Leg, Preference, RouteAlert } from "../types";
 import type { NotificationPermissionState } from "../notifications";
+import type { JourneyQuery } from "../api";
 
 export interface PlannerPanelProps {
   corridor: Corridor | null;
@@ -23,7 +24,7 @@ export interface PlannerPanelProps {
   onEnableNotifications: () => void;
   searching: boolean;
   searchError: string | null;
-  onSearch: (from: string, to: string) => void;
+  onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
   totals: { durationMin: number; costEuro: number; co2Kg: number } | null;
 }
@@ -65,11 +66,19 @@ export function PlannerPanel({
 
           <div className="card">
             <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 600 }}>{corridor.name}</p>
+            {corridor.summary && (
+              <p className="leg-meta" style={{ marginTop: 0 }}>
+                Leave {corridor.summary.leaveAt} &middot; arrive {corridor.summary.arriveAt}
+                {corridor.summary.liveData ? " · live delays included" : " · timetable only (no live data)"}
+              </p>
+            )}
             {totals && (
               <div className="summary-bar">
                 <div>
                   <span>Total time</span>
-                  {totals.durationMin} min
+                  {totals.durationMin >= 60
+                    ? `${Math.floor(totals.durationMin / 60)}h ${String(totals.durationMin % 60).padStart(2, "0")}m`
+                    : `${totals.durationMin} min`}
                 </div>
                 <div>
                   <span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}

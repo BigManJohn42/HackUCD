@@ -559,3 +559,56 @@ input:focus-visible {
   font-size: 0.85rem;
   font-weight: 700;
 }
+
+/* Real journey steps: board / get off lines, live badges, stopovers */
+.ride-details {
+  margin-top: 4px;
+}
+.ride-line {
+  margin: 2px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.live-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+.live-on-time,
+.live-early {
+  background: #e4f0e3;
+  color: var(--color-accent-green-dark);
+}
+.live-late {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+.live-cancelled,
+.live-skipped {
+  background: var(--color-critical-bg);
+  color: var(--color-critical-text);
+}
+.leg-stay {
+  background: var(--color-nav-active-bg);
+  border-radius: 10px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.journey-search .search-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.journey-search .search-row > div {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.journey-search .optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}

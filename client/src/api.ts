@@ -13,8 +13,18 @@ export function fetchCorridor(): Promise<Corridor> {
   return fetch("/api/corridor").then((r) => asJson<Corridor>(r));
 }
 
-export function searchJourney(from: string, to: string, depart?: string): Promise<Corridor> {
+export interface JourneyQuery {
+  from: string;
+  to: string;
+  via?: string; // stopover place
+  stayMins?: number; // how long to stay at the stopover (server default 120)
+  depart?: string; // "HH:MM", default now
+}
+
+export function searchJourney({ from, to, via, stayMins, depart }: JourneyQuery): Promise<Corridor> {
   const params = new URLSearchParams({ from, to });
+  if (via) params.set("via", via);
+  if (via && stayMins !== undefined) params.set("stay", String(stayMins));
   if (depart) params.set("depart", depart);
   return fetch(`/api/plan?${params.toString()}`).then((r) => asJson<Corridor>(r));
 }

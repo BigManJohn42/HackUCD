@@ -21,6 +21,7 @@ const MODE_COLOR: Record<Mode, string> = {
   luas: "#2e7fb8",
   rail: "#2e7fb8",
   cycle: "#b8860b",
+  stay: "#9c6644",
 };
 
 interface StopPoint {

@@ -1,5 +1,55 @@
 import { useEffect, useState } from "react";
-import { searchPlaces } from "../api";
+import { searchPlaces, type JourneyQuery } from "../api";
+
+/** Debounced stop-name suggestions for one input. */
+function useSuggestions(query: string): string[] {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchPlaces(query).then(setSuggestions).catch(() => setSuggestions([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  return suggestions;
+}
+
+function PlaceInput({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  optional,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  optional?: boolean;
+}) {
+  const suggestions = useSuggestions(value);
+  return (
+    <>
+      <label htmlFor={id}>
+        {label} {optional && <span className="optional">(optional)</span>}
+      </label>
+      <input
+        id={id}
+        list={`${id}-suggestions`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      <datalist id={`${id}-suggestions`}>
+        {suggestions.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+    </>
+  );
+}
 
 export function JourneySearchForm({
   onSearch,
@@ -7,68 +57,67 @@ export function JourneySearchForm({
   searching,
   error,
 }: {
-  onSearch: (from: string, to: string) => void;
+  onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
   searching: boolean;
   error: string | null;
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [fromSuggestions, setFromSuggestions] = useState<string[]>([]);
-  const [toSuggestions, setToSuggestions] = useState<string[]>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchPlaces(from).then(setFromSuggestions).catch(() => setFromSuggestions([]));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [from]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchPlaces(to).then(setToSuggestions).catch(() => setToSuggestions([]));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [to]);
+  const [via, setVia] = useState("");
+  const [stayHours, setStayHours] = useState("2");
+  const [depart, setDepart] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!from.trim() || !to.trim()) return;
-    onSearch(from.trim(), to.trim());
+    const stay = Math.round(Number(stayHours) * 60);
+    onSearch({
+      from: from.trim(),
+      to: to.trim(),
+      via: via.trim() || undefined,
+      stayMins: via.trim() && Number.isFinite(stay) ? stay : undefined,
+      depart: depart || undefined,
+    });
   }
 
   return (
     <form className="card journey-search" onSubmit={handleSubmit}>
       <h2 style={{ marginTop: 0 }}>Plan a real journey</h2>
-      <label htmlFor="from-input">From</label>
-      <input
-        id="from-input"
-        list="from-suggestions"
-        value={from}
-        onChange={(e) => setFrom(e.target.value)}
-        placeholder="e.g. UCD Belfield"
-        autoComplete="off"
-      />
-      <datalist id="from-suggestions">
-        {fromSuggestions.map((p) => (
-          <option key={p} value={p} />
-        ))}
-      </datalist>
+      <PlaceInput id="from-input" label="From" value={from} onChange={setFrom} placeholder="e.g. UCD" />
+      <PlaceInput id="to-input" label="To" value={to} onChange={setTo} placeholder="e.g. Galway" />
 
-      <label htmlFor="to-input">To</label>
-      <input
-        id="to-input"
-        list="to-suggestions"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        placeholder="e.g. Heuston Station"
-        autoComplete="off"
+      <PlaceInput
+        id="via-input"
+        label="Stop over at"
+        value={via}
+        onChange={setVia}
+        placeholder="e.g. Athlone - break up a long trip"
+        optional
       />
-      <datalist id="to-suggestions">
-        {toSuggestions.map((p) => (
-          <option key={p} value={p} />
-        ))}
-      </datalist>
+
+      <div className="search-row">
+        <div>
+          <label htmlFor="stay-input">Stay for (hours)</label>
+          <input
+            id="stay-input"
+            type="number"
+            min="0"
+            max="72"
+            step="0.5"
+            value={stayHours}
+            onChange={(e) => setStayHours(e.target.value)}
+            disabled={!via.trim()}
+            title={via.trim() ? undefined : "Add a stopover place first"}
+          />
+        </div>
+        <div>
+          <label htmlFor="depart-input">
+            Leave at <span className="optional">(default: now)</span>
+          </label>
+          <input id="depart-input" type="time" value={depart} onChange={(e) => setDepart(e.target.value)} />
+        </div>
+      </div>
 
       {error && (
         <p className="break-suggestion" role="alert" style={{ color: "var(--color-critical-text)" }}>
@@ -85,8 +134,8 @@ export function JourneySearchForm({
         </button>
       </div>
       <p className="leg-meta" style={{ marginTop: 10, marginBottom: 0 }}>
-        Real stops and timetables from Ireland's National Transport Authority. Type a few
-        letters for suggestions - stop names work best.
+        Real stops and timetables from Ireland's National Transport Authority, with live delays
+        where available. Type a few letters for suggestions - stop names work best.
       </p>
     </form>
   );

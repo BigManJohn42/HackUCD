@@ -4,14 +4,32 @@ import { planRealJourney } from "../services/plannerBridge.js";
 
 export const planRouter = Router();
 
-planRouter.get("/plan", (req, res) => {
-  const { from, to, depart } = req.query;
+// GET /api/plan?from=UCD&to=Galway[&via=Athlone][&via=...][&stay=120][&depart=08:30]
+planRouter.get("/plan", async (req, res) => {
+  const { from, to, depart, via, stay } = req.query;
   if (typeof from !== "string" || typeof to !== "string" || !from.trim() || !to.trim()) {
     res.status(400).json({ error: "from and to are required" });
     return;
   }
+  if (depart !== undefined && (typeof depart !== "string" || !/^\d{1,2}:\d{2}$/.test(depart))) {
+    res.status(400).json({ error: "depart must be HH:MM" });
+    return;
+  }
+  const vias = (Array.isArray(via) ? via : via === undefined ? [] : [via])
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const stayMins = stay === undefined || stay === "" ? 120 : Number(stay);
+  if (!Number.isFinite(stayMins) || stayMins < 0 || stayMins > 3 * 24 * 60) {
+    res.status(400).json({ error: "stay must be a number of minutes (0 - 4320)" });
+    return;
+  }
 
-  const result = planRealJourney(from.trim(), to.trim(), typeof depart === "string" ? depart : undefined);
+  const result = await planRealJourney(from.trim(), to.trim(), {
+    depart: typeof depart === "string" ? depart : undefined,
+    vias,
+    stayMins,
+  });
   if (!result.ok) {
     res.status(404).json({ error: result.error });
     return;

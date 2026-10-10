@@ -7,6 +7,7 @@ import {
   searchJourney,
   startCheckout,
   subscribeToAlerts,
+  type JourneyQuery,
 } from "./api";
 import {
   getNotificationPermission,
@@ -176,11 +177,11 @@ export default function App() {
     }
   }
 
-  async function handleSearch(from: string, to: string) {
+  async function handleSearch(query: JourneyQuery) {
     setSearching(true);
     setSearchError(null);
     try {
-      const c = await searchJourney(from, to);
+      const c = await searchJourney(query);
       setCorridor(c);
       setPreference("fastest");
       setSelections(defaultSelections(c, "fastest"));
@@ -237,6 +238,8 @@ export default function App() {
       costEuro += option.costEuro;
       co2Kg += option.co2Kg;
     }
+    // Real journeys know the true door-to-door time (including waits and stopovers).
+    if (corridor.summary) durationMin = corridor.summary.durationMin;
     return { durationMin, costEuro, co2Kg };
   }, [corridor, selections]);
 
