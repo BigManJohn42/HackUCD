@@ -50,8 +50,3 @@ export interface RouteAlert {
   message: string;
   timestamp: string;
 }
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}

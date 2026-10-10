@@ -1,14 +1,5 @@
-import type { Leg, LiveStatus, Mode, RouteOption } from "../types";
+import type { Leg, LiveStatus, RouteOption } from "../types";
 import { BreakPanel } from "./BreakPanel";
-
-const MODE_ICON: Record<Mode, string> = {
-  walk: "\u{1F6B6}",
-  bus: "\u{1F68C}",
-  luas: "\u{1F68A}",
-  rail: "\u{1F686}",
-  cycle: "\u{1F6B4}",
-  stay: "☕",
-};
 
 function LiveBadge({ live }: { live?: LiveStatus }) {
   if (!live || live.status === "scheduled") return null;
@@ -81,7 +72,7 @@ export function ItineraryStep({
   return (
     <div className={`leg${isStay ? " leg-stay" : ""}`}>
       <div className="leg-title">
-        {MODE_ICON[selected.mode]} {isStay ? selected.label : isReal ? selected.label : `${leg.from} → ${leg.to}`}
+        {isReal ? selected.label : <>{leg.from} &rarr; {leg.to}</>}
       </div>
 
       {isReal ? (
@@ -96,7 +87,7 @@ export function ItineraryStep({
           >
             {leg.options.map((opt) => (
               <option key={opt.id} value={opt.id}>
-                {MODE_ICON[opt.mode]} {opt.label} - {opt.durationMin} min
+                {opt.label} - {opt.durationMin} min
               </option>
             ))}
           </select>

@@ -26,7 +26,7 @@ export interface PlannerPanelProps {
   searchError: string | null;
   onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
-  totals: { durationMin: number; costEuro: number; co2Kg: number } | null;
+  totals: { durationMin: number; costEuro: number } | null;
 }
 
 export function PlannerPanel({
@@ -83,15 +83,11 @@ export function PlannerPanel({
                 <div>
                   <span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}
                 </div>
-                <div>
-                  <span>CO2</span>
-                  {totals.co2Kg.toFixed(1)} kg
-                </div>
               </div>
             )}
             <p className="leg-meta" style={{ marginTop: 10, marginBottom: 0 }}>
-              Cost and CO2 are flat per-mode estimates (not live fares or distance-based
-              figures) - useful for comparing modes, not for exact budgeting.
+              Costs are flat per-mode estimates, not live fares - useful for comparing
+              modes, not for exact budgeting.
             </p>
           </div>
 
