@@ -19,7 +19,7 @@ import { HomePage } from "./pages/HomePage";
 import { ChatWidget } from "./components/ChatWidget";
 import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
-import type { Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
+import type { Corridor, Leg, Preference, RouteAlert, RouteOption, SubscriptionPlan } from "./types";
 
 const PAGES = ["home", "journey", "subscriptions"] as const;
 type Page = (typeof PAGES)[number];
@@ -86,7 +86,7 @@ export default function App() {
 
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
   const [isPro, setIsPro] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
+  const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
   const [myLocationEnabled, setMyLocationEnabled] = useState(false);
@@ -218,13 +218,14 @@ export default function App() {
     setNotifPermission(result);
   }
 
-  async function handleUpgrade() {
-    setUpgrading(true);
+  async function handleUpgrade(plan: SubscriptionPlan) {
+    if (upgrading) return;
+    setUpgrading(plan);
     try {
-      const { url } = await startCheckout();
+      const { url } = await startCheckout(plan);
       window.location.href = url;
     } catch {
-      setUpgrading(false);
+      setUpgrading(null);
       alert("Could not start checkout. Make sure STRIPE_SECRET_KEY is set in server/.env.");
     }
   }

@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import type { Corridor, RouteAlert } from "./types";
+import type { Corridor, RouteAlert, SubscriptionPlan } from "./types";
 
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -51,8 +51,12 @@ export function fetchBillingStatus(): Promise<{ isPro: boolean }> {
   return fetch("/api/billing/status").then((r) => asJson(r));
 }
 
-export function startCheckout(): Promise<{ url: string }> {
-  return fetch("/api/billing/create-checkout-session", { method: "POST" }).then((r) =>
+export function startCheckout(plan: SubscriptionPlan = "monthly"): Promise<{ url: string }> {
+  return fetch("/api/billing/create-checkout-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan }),
+  }).then((r) =>
     asJson(r)
   );
 }

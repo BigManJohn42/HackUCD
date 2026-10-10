@@ -1,3 +1,5 @@
+export type SubscriptionPlan = "monthly" | "yearly";
+
 export type Mode = "walk" | "bus" | "luas" | "rail" | "cycle" | "stay";
 
 export interface RouteOption {
