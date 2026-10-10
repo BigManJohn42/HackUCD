@@ -1,8 +1,9 @@
+import { AlertToasts } from "./AlertToasts";
 import { ItineraryStep } from "./ItineraryStep";
 import { JourneySearchForm } from "./JourneySearchForm";
 import { PreferenceToggle } from "./PreferenceToggle";
 import { RouteMap } from "./RouteMap";
-import type { Corridor, Leg, Preference } from "../types";
+import type { Corridor, Leg, Preference, RouteAlert } from "../types";
 import type { NotificationPermissionState } from "../notifications";
 import type { JourneyQuery } from "../api";
 
@@ -15,6 +16,8 @@ export interface PlannerPanelProps {
   openBreaks: Record<string, boolean>;
   onToggleBreak: (legId: string) => void;
   onGetBreakSuggestion: (leg: Leg, minutes: number) => Promise<string>;
+  alerts: RouteAlert[];
+  onDismissAlert: (alert: RouteAlert) => void;
   myLocationEnabled: boolean;
   onToggleMyLocation: () => void;
   notifPermission: NotificationPermissionState;
@@ -35,6 +38,8 @@ export function PlannerPanel({
   openBreaks,
   onToggleBreak,
   onGetBreakSuggestion,
+  alerts,
+  onDismissAlert,
   myLocationEnabled,
   onToggleMyLocation,
   notifPermission,
@@ -50,6 +55,8 @@ export function PlannerPanel({
   return (
     <>
       <JourneySearchForm onSearch={onSearch} onLoadSample={onLoadSample} searching={searching} error={searchError} />
+
+      <AlertToasts alerts={alerts} corridor={corridor} selections={selections} onDismiss={onDismissAlert} />
 
       {corridor && (
         <>

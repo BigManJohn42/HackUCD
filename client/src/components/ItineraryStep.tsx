@@ -77,7 +77,7 @@ export function ItineraryStep({
   const hasAlternatives = leg.options.length > 1;
 
   return (
-    <div className={`leg${isStay ? " leg-stay" : ""}`}>
+    <div id={`leg-${leg.id}`} className={`leg${isStay ? " leg-stay" : ""}`}>
       <div className="leg-title">
         {isReal && !hasAlternatives ? selected.label : <>{leg.from} &rarr; {leg.to}</>}
       </div>

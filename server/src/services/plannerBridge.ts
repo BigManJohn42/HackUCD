@@ -53,7 +53,7 @@ interface PlannerSegment {
   legs: PlannerLeg[];
 }
 
-interface TripUpdateRow {
+export interface TripUpdateRow {
   tripId: string;
   stopId: string | null;
   stopSequence: number | null;
@@ -86,7 +86,7 @@ function fmtTime(secs: number): string {
 const minutes = (secs: number) => Math.max(1, Math.round(secs / 60));
 
 /** Live delay for a trip at its boarding stop, from the GTFS-R rows for that trip. */
-function liveStatusFor(updates: TripUpdateRow[] | undefined, stopId: string | undefined): LiveStatus {
+export function liveStatusFor(updates: TripUpdateRow[] | undefined, stopId: string | undefined): LiveStatus {
   if (!updates) return { status: "scheduled" };
   if (updates.some((u) => u.tripStatus === "CANCELED")) return { status: "cancelled" };
   // Use the update for our stop; otherwise the vehicle's next upcoming stop (lowest sequence),
