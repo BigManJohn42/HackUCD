@@ -212,7 +212,11 @@ export function getConnections(date, { log = () => {} } = {}) {
     log(`Building timetable for ${date} (first run today, takes about a minute)...`);
     c = buildConnections(date);
     fs.mkdirSync(CACHE_DIR, { recursive: true });
-    for (const f of fs.readdirSync(CACHE_DIR)) if (f.startsWith("connections-")) fs.rmSync(path.join(CACHE_DIR, f));
+    const today = irishNow().date;
+    for (const f of fs.readdirSync(CACHE_DIR)) {
+      const d = f.match(/^connections-(d{8})./)?.[1];
+      if (d && d < shiftDate(today, -1)) fs.rmSync(path.join(CACHE_DIR, f));
+    }
     fs.writeFileSync(bin, Buffer.from(c.packed.buffer, c.packed.byteOffset, c.packed.byteLength));
     fs.writeFileSync(meta, JSON.stringify({ n: c.n, tripIds: c.tripIds, dbStamp }));
   }
@@ -305,7 +309,8 @@ const MODES = { 0: "Luas", 2: "Train", 3: "Bus" };
 /**
  * Plan a journey from -> [vias...] -> to, staying `stayMins` at each via.
  * depart: "HH:MM" (default now), date: "YYYY-MM-DD" (default today).
- * Returns { segments: [{ from, to, leaveAt, arriveAt, legs }], stays, arriveAt } with times in seconds since midnight.
+ * Returns { segments: [{ from, to, leaveAt, arriveAt, legs }], stays, arriveAt }. Times are seconds since
+ * midnight of the start date, so they go past 86400 when a long stopover runs into the next day.
  */
 export function planJourney({ from, to, vias = [], stayMins = 120, depart, date, log } = {}) {
   const now = irishNow();
@@ -317,7 +322,6 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
     t = Number(m[1]) * 3600 + Number(m[2]) * 60;
   }
 
-  const c = getConnections(serviceDate, { log });
   const { stops } = loadStops();
   const places = [from, ...vias, to].map(resolvePlace);
   for (const p of places) if (!p.near.length) throw new Error(`No stops within ${WALK_RADIUS_M} m of ${p.name}`);
@@ -325,11 +329,19 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
   const segments = [];
   for (let k = 0; k < places.length - 1; k++) {
     const a = places[k], b = places[k + 1];
-    let result = earliestArrival(c, a.near, b.near, t);
-    if (!result) return { ok: false, error: `No connection from ${a.name} to ${b.name} after ${fmt(t)} on this day`, segments };
+    // Each segment runs on the timetable of the day it starts (long stopovers roll into the
+    // next day). If nothing runs for the rest of that day, try the following morning.
+    let dayOff = Math.floor(t / 86400), local = t - dayOff * 86400, c, result = null;
+    for (let tries = 0; tries < 2 && !result; tries++) {
+      if (tries) { dayOff++; local = 0; }
+      c = getConnections(shiftDate(serviceDate, dayOff), { log });
+      result = earliestArrival(c, a.near, b.near, local);
+    }
+    if (!result) return { ok: false, error: `No connection from ${a.name} to ${b.name} after ${fmt(t)}`, segments };
+    const off = dayOff * 86400;
     // Leave as late as possible while still arriving at the same time: avoids pointless
     // early departures and detours (e.g. riding back a stop to catch a train that comes past anyway).
-    let lo = t, hi = result.arrive;
+    let lo = local, hi = result.arrive;
     while (hi - lo > 60) {
       const mid = Math.floor((lo + hi) / 2);
       const r = earliestArrival(c, a.near, b.near, mid);
@@ -338,7 +350,7 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
 
     const trips = describeTrips(result.legs.filter((l) => l.type === "ride").map((l) => l.trip));
     const legs = result.legs.map((l) => {
-      const base = { ...l, fromName: stops[l.fromStop].stop_name, toName: stops[l.toStop].stop_name,
+      const base = { ...l, ...(l.depart != null && { depart: l.depart + off }), arrive: l.arrive + off, fromName: stops[l.fromStop].stop_name, toName: stops[l.toStop].stop_name,
         fromCode: stops[l.fromStop].stop_code, toCode: stops[l.toStop].stop_code };
       if (l.type !== "ride") return base;
       const info = trips.get(l.trip) ?? {};
@@ -346,14 +358,14 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
       return { ...base, mode: MODES[info.route_type] ?? "Transit", route, headsign: info.headsign ?? null };
     });
     const firstRide = legs.find((l) => l.type === "ride");
-    const leaveAt = (firstRide ? firstRide.depart : t) - result.originWalk;
+    const leaveAt = (firstRide ? firstRide.depart : local + off) - result.originWalk;
     segments.push({
-      from: a.name, to: b.name, leaveAt, arriveAt: result.arrive,
+      from: a.name, to: b.name, leaveAt, arriveAt: result.arrive + off,
       originWalk: { secs: result.originWalk, toName: stops[result.originStop].stop_name },
       destWalk: { secs: result.destWalk, fromName: stops[result.destStop].stop_name },
       legs,
     });
-    t = result.arrive + (k < places.length - 2 ? stayMins * 60 : 0);
+    t = result.arrive + off + (k < places.length - 2 ? stayMins * 60 : 0);
   }
   return {
     ok: true,
@@ -365,9 +377,10 @@ export function planJourney({ from, to, vias = [], stayMins = 120, depart, date,
   };
 }
 
-/** "HH:MM" from seconds since midnight (wraps past 24:00). */
+/** "HH:MM" from seconds since the start day's midnight, with "(+1 day)" once past it. */
 export function fmt(secs) {
   const s = Math.round(secs);
+  const days = Math.floor(s / 86400);
   const h = Math.floor(s / 3600) % 24, m = Math.floor((s % 3600) / 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}${days > 0 ? ` (+${days} day${days > 1 ? "s" : ""})` : ""}`;
 }
