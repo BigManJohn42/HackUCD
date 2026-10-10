@@ -1,0 +1,25 @@
+{
+  "name": "hackucd",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "delays": "node --env-file=.env scripts/delays.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BigManJohn42/HackUCD.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/BigManJohn42/HackUCD/issues"
+  },
+  "homepage": "https://github.com/BigManJohn42/HackUCD#readme",
+  "type": "module",
+  "dependencies": {
+    "gtfs-realtime-bindings": "^2.2.0"
+  }
+}
