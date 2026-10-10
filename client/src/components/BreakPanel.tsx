@@ -50,7 +50,14 @@ export function BreakPanel({
       )}
 
       {error && <p className="break-suggestion" role="alert">{error}</p>}
-      {suggestion && <p className="break-suggestion">{suggestion}</p>}
+      {suggestion && (
+        <>
+          <p className="break-suggestion">{suggestion}</p>
+          <p className="leg-meta" style={{ marginBottom: 0 }}>
+            AI-generated suggestion - double check opening hours and departure times yourself.
+          </p>
+        </>
+      )}
     </div>
   );
 }

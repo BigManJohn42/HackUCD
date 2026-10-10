@@ -26,7 +26,11 @@ export function ChatPanel({
 
   return (
     <div className="card chat-panel">
-      <h2 style={{ marginTop: 0 }}>Ask ÉirGo</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 4 }}>Ask ÉirGo</h2>
+      <p className="leg-meta" style={{ marginTop: 0 }}>
+        AI-generated - can be wrong, and live disruption alerts are city-wide, not matched to
+        your exact route yet. Always check a departures board before you rely on a time.
+      </p>
       <div className="chat-log">
         {messages.length === 0 && (
           <p style={{ color: "var(--color-text-muted)" }}>
