@@ -26,7 +26,7 @@ export interface PlannerPanelProps {
   searchError: string | null;
   onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
-  totals: { durationMin: number; costEuro: number } | null;
+  totals: { durationMin: number } | null;
 }
 
 export function PlannerPanel({
@@ -80,15 +80,8 @@ export function PlannerPanel({
                     ? `${Math.floor(totals.durationMin / 60)}h ${String(totals.durationMin % 60).padStart(2, "0")}m`
                     : `${totals.durationMin} min`}
                 </div>
-                <div>
-                  <span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}
-                </div>
               </div>
             )}
-            <p className="leg-meta" style={{ marginTop: 10, marginBottom: 0 }}>
-              Costs are flat per-mode estimates, not live fares - useful for comparing
-              modes, not for exact budgeting.
-            </p>
           </div>
 
           <RouteMap corridor={corridor} selections={selections} myLocationEnabled={myLocationEnabled} />

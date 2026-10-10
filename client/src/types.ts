@@ -41,7 +41,7 @@ export interface Corridor {
   summary?: { leaveAt: string; arriveAt: string; durationMin: number; liveData: boolean };
 }
 
-export type Preference = "fastest" | "fewest-transfers" | "cheapest";
+export type Preference = "fastest" | "fewest-transfers";
 
 export interface RouteAlert {
   legId: string;

@@ -43,7 +43,6 @@ type FontSize = "small" | "standard" | "large";
 const TRANSIT_MODES = new Set(["bus", "luas", "rail"]);
 
 function scoreOption(option: RouteOption, preference: Preference): number {
-  if (preference === "cheapest") return option.costEuro * 1000 + option.durationMin;
   if (preference === "fewest-transfers") {
     return (TRANSIT_MODES.has(option.mode) ? 1000 : 0) + option.durationMin;
   }
@@ -232,15 +231,13 @@ export default function App() {
   const totals = useMemo(() => {
     if (!corridor) return null;
     let durationMin = 0;
-    let costEuro = 0;
     for (const leg of corridor.legs) {
       const option = leg.options.find((o) => o.id === selections[leg.id]) ?? leg.options[0];
       durationMin += option.durationMin;
-      costEuro += option.costEuro;
     }
     // Real journeys know the true door-to-door time (including waits and stopovers).
     if (corridor.summary) durationMin = corridor.summary.durationMin;
-    return { durationMin, costEuro };
+    return { durationMin };
   }, [corridor, selections]);
 
   const plannerProps = {

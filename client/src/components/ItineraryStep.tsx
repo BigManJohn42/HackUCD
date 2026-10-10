@@ -42,7 +42,6 @@ function RealStepDetails({ leg, option }: { leg: Leg; option: RouteOption }) {
       </p>
       <p className="leg-meta">
         {option.durationMin} min on board
-        {option.costEuro > 0 ? ` · ~€${option.costEuro.toFixed(2)}` : ""}
         {option.laterDepartures && option.laterDepartures.length > 0 &&
           ` · if you miss it: ${option.laterDepartures.join(", ")}`}
       </p>
@@ -94,7 +93,6 @@ export function ItineraryStep({
 
           <p className="leg-meta">
             {selected.durationMin} min
-            {selected.costEuro > 0 ? ` · €${selected.costEuro.toFixed(2)}` : " · free"}
             {selected.departures.length > 0 && ` · next: ${selected.departures.slice(0, 3).join(", ")}`}
             {selected.notes ? ` · ${selected.notes}` : ""}
           </p>

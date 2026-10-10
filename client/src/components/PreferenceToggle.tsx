@@ -3,7 +3,6 @@ import type { Preference } from "../types";
 const OPTIONS: { value: Preference; label: string }[] = [
   { value: "fastest", label: "Fastest" },
   { value: "fewest-transfers", label: "Fewest transfers" },
-  { value: "cheapest", label: "Cheapest" },
 ];
 
 export function PreferenceToggle({
