@@ -9,6 +9,7 @@ import { itineraryRouter } from "./routes/itinerary.js";
 import { chatRouter } from "./routes/chat.js";
 import { billingRouter } from "./routes/billing.js";
 import { planRouter } from "./routes/plan.js";
+import { geometryRouter } from "./routes/geometry.js";
 import { startLiveFeed } from "./services/liveFeed.js";
 
 // NTA_API_KEY and GTFS_FEED live in the repo-root .env (shared with the
@@ -27,6 +28,7 @@ app.use("/api", itineraryRouter);
 app.use("/api", chatRouter);
 app.use("/api", billingRouter);
 app.use("/api", planRouter);
+app.use("/api", geometryRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
@@ -37,6 +39,14 @@ const io = new Server(httpServer, {
 
 io.on("connection", (socket) => {
   console.log(`[socket] client connected: ${socket.id}`);
+  socket.data.watchedOptionIds = new Set<string>();
+  socket.data.watchedTripIds = new Set<string>();
+
+  socket.on("watch-journey", (payload: { optionIds?: string[]; tripIds?: string[] }) => {
+    socket.data.watchedOptionIds = new Set(Array.isArray(payload?.optionIds) ? payload.optionIds : []);
+    socket.data.watchedTripIds = new Set(Array.isArray(payload?.tripIds) ? payload.tripIds : []);
+  });
+
   socket.on("disconnect", () => console.log(`[socket] client disconnected: ${socket.id}`));
 });
 

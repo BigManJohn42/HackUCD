@@ -32,7 +32,6 @@ export function BreakPanel({
         id="break-minutes"
         type="number"
         min={5}
-        max={120}
         step={5}
         value={minutes}
         onChange={(e) => setMinutes(Number(e.target.value))}

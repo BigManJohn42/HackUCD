@@ -40,6 +40,52 @@ function FitToStops({ points }: { points: StopPoint[] }) {
   return null;
 }
 
+interface Segment {
+  legId: string;
+  positions: [number, number][];
+  color: string;
+  label: string;
+}
+
+// Keyed by position pair, not just legId - legIds are reused across different
+// searches (e.g. "leg-0-0"), so a position-based key stops a brand-new search
+// from briefly flashing a previous, unrelated journey's cached path.
+const segKey = (seg: Segment) => `${seg.positions[0]?.join(",")}|${seg.positions[1]?.join(",")}`;
+
+/** Real road-following paths per segment, fetched from the server (which proxies
+ * OSRM) instead of drawing a straight line between the two stops. Falls back to
+ * the straight line - already in `positions` - while loading or if a pair can't
+ * be routed. */
+function useRealPaths(segments: Segment[]): Record<string, [number, number][]> {
+  const [paths, setPaths] = useState<Record<string, [number, number][]>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    segments.forEach((seg) => {
+      const [from, to] = seg.positions;
+      if (!from || !to || (from[0] === to[0] && from[1] === to[1])) return; // stopovers etc.
+      const key = segKey(seg);
+      const params = new URLSearchParams({
+        from: `${from[0]},${from[1]}`,
+        to: `${to[0]},${to[1]}`,
+      });
+      fetch(`/api/route-path?${params}`)
+        .then((r) => (r.ok ? r.json() : { points: [] }))
+        .then((data: { points?: [number, number][] }) => {
+          if (cancelled || !data.points?.length) return;
+          setPaths((prev) => ({ ...prev, [key]: data.points! }));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments.map((s) => segKey(s)).join("|")]);
+
+  return paths;
+}
+
 function MyLocationMarker({ enabled }: { enabled: boolean }) {
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +156,8 @@ export function RouteMap({
     [corridor, selections]
   );
 
+  const realPaths = useRealPaths(segments);
+
   if (stops.length === 0) return null;
 
   return (
@@ -126,7 +174,10 @@ export function RouteMap({
         />
         <FitToStops points={stops} />
         {segments.map((seg) => (
-          <Polyline key={seg.legId} positions={seg.positions} pathOptions={{ color: seg.color, weight: 5, opacity: 0.85 }}>
+          <Polyline
+            key={seg.legId}
+            positions={realPaths[segKey(seg)] ?? seg.positions}
+            pathOptions={{ color: seg.color, weight: 5, opacity: 0.85 }}>
             <Popup>{seg.label}</Popup>
           </Polyline>
         ))}

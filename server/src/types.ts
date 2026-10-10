@@ -16,6 +16,7 @@ export interface RouteOption {
   toStopCode?: string | null;
   laterDepartures?: string[]; // the same route's next departures, in case you miss this one
   live?: LiveStatus;
+  tripId?: string; // real GTFS trip id, so the client can ask the server to watch it for live alerts
 }
 
 export interface LiveStatus {
@@ -58,4 +59,10 @@ export interface ChatContext {
   transferAmenities?: string[];
   isPro?: boolean;
   recentAlerts?: RouteAlert[];
+  allowPlanning?: boolean;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
 }

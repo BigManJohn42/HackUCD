@@ -45,7 +45,7 @@ planRouter.get("/places", (req, res) => {
   }
   try {
     const seen = new Set<string>();
-    const places = findStops(q)
+    const places = (findStops(q) as { stop_name: string }[])
       .filter((s) => {
         if (seen.has(s.stop_name)) return false;
         seen.add(s.stop_name);

@@ -16,6 +16,7 @@ export interface RouteOption {
   toStopCode?: string | null;
   laterDepartures?: string[]; // the same route's next departures, in case you miss this one
   live?: LiveStatus;
+  tripId?: string; // real GTFS trip id, used to ask the server to watch it for live alerts
 }
 
 export interface LiveStatus {

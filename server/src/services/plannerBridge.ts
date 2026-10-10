@@ -121,6 +121,55 @@ function laterDeparturesFor(leg: PlannerLeg, stopId: string | undefined): string
   }
 }
 
+function distanceM(a: [number, number], b: [number, number]): number {
+  const x = (b[1] - a[1]) * Math.cos(((a[0] + b[0]) / 2) * (Math.PI / 180));
+  const y = b[0] - a[0];
+  return Math.sqrt(x * x + y * y) * 111_320;
+}
+
+const WALK_ALT_MAX_M = 3000; // ~36 min walk - still a reasonable alternative to a short bus hop
+const CYCLE_ALT_MAX_M = 8000; // ~32 min cycle
+
+/**
+ * The real planner only ever returns one route per leg (its job is finding
+ * THE best path, not enumerating alternatives), so a leg normally has nothing
+ * to swap between. For short-enough hops, synthesize a walk/cycle alternative
+ * from straight-line distance so the mode-select dropdown has real choices -
+ * clearly estimates, not scheduled services.
+ */
+function alternativesFor(leg: PlannerLeg, nextId: () => string): RouteOption[] {
+  const from = coordsForCode(leg.fromCode);
+  const to = coordsForCode(leg.toCode);
+  if (!from || !to) return [];
+  const meters = distanceM(from, to);
+  const alts: RouteOption[] = [];
+  if (meters <= WALK_ALT_MAX_M) {
+    alts.push({
+      id: nextId(),
+      mode: "walk",
+      label: `Walk instead (~${minutes((meters / 1000) * 12 * 60)} min, estimated)`,
+      durationMin: minutes((meters / 1000) * 12 * 60),
+      departures: [],
+      costEuro: 0,
+      co2Kg: 0,
+      notes: "Estimated from straight-line distance, not a routed path.",
+    });
+  }
+  if (meters <= CYCLE_ALT_MAX_M) {
+    alts.push({
+      id: nextId(),
+      mode: "cycle",
+      label: `Cycle instead (~${minutes((meters / 1000) * 4 * 60)} min, estimated)`,
+      durationMin: minutes((meters / 1000) * 4 * 60),
+      departures: [],
+      costEuro: 0,
+      co2Kg: 0,
+      notes: "Estimated from straight-line distance, not a routed path.",
+    });
+  }
+  return alts;
+}
+
 function walkOption(id: string, toName: string, secs: number): RouteOption {
   return {
     id,
@@ -154,6 +203,7 @@ function rideOption(leg: PlannerLeg, id: string, live: Map<string, TripUpdateRow
     // Luas runs to a frequency, and its GTFS-R delays are matched to the wrong scheduled
     // trips (often an hour "early"), so only trust live data for buses and trains.
     live: live && tripId && mode !== "luas" ? liveStatusFor(live.get(tripId), stopId) : undefined,
+    tripId,
   };
 }
 
@@ -236,12 +286,16 @@ export async function planRealJourney(
     segment.legs
       .filter((l) => l.type === "ride" || l.fromName !== l.toName)
       .forEach((leg, legIndex) => {
+        const options =
+          leg.type === "ride"
+            ? [rideOption(leg, nextId(), live), ...alternativesFor(leg, nextId)]
+            : [walkOption(nextId(), leg.toName, leg.secs ?? 60)];
         legs.push({
           id: `leg-${segIndex}-${legIndex}`,
           from: leg.fromName,
           to: leg.toName,
           isTransferPoint: leg.type === "ride",
-          options: [leg.type === "ride" ? rideOption(leg, nextId(), live) : walkOption(nextId(), leg.toName, leg.secs ?? 60)],
+          options,
         });
         addCoord(leg.fromName, leg.fromCode);
         addCoord(leg.toName, leg.toCode);
