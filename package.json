@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "delays": "node --env-file-if-exists=.env scripts/delays.js",
     "gtfs:update": "node --env-file-if-exists=.env scripts/gtfs-update.js",
-    "stops": "node scripts/stops.js"
+    "stops": "node scripts/stops.js",
+    "trains": "node scripts/trains.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +24,7 @@
   "type": "module",
   "dependencies": {
     "csv-parse": "^7.0.3",
+    "fast-xml-parser": "^5.11.2",
     "gtfs-realtime-bindings": "^2.2.0",
     "yauzl": "^3.4.0"
   }

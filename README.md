@@ -14,6 +14,14 @@ Journey planner for Irish public transport, with support for long stopovers betw
 `src/nta.js` exports `getTripUpdates()` and `getVehiclePositions()` (cached for 60s to respect the API rate limit).
 Stop/route IDs are from the static GTFS feed: https://www.transportforireland.ie/transitData/PT_Data.html
 
+## Live trains (Irish Rail, no key needed)
+
+The NTA feed only covers Dublin Bus, Bus Éireann and Go-Ahead, so trains/DART come from the Irish Rail API.
+
+- `npm run trains` — trains running right now
+- `npm run trains -- connolly` — live departures board (add a number for the window in minutes, e.g. `connolly 30`)
+- `src/irishrail.js` exports `getStations()`, `findStations()`, `getStationBoard()` and `getCurrentTrains()`.
+
 ## Static timetable
 
 - `npm run gtfs:update` downloads the feed named by `GTFS_FEED` in `.env` into `data/gtfs/` (git-ignored; TFI refreshes it nightly).
