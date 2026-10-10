@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   askConcierge,
+  askConciergeChat,
   confirmCheckout,
   fetchBillingStatus,
   fetchCorridor,
   searchJourney,
   startCheckout,
   subscribeToAlerts,
+  watchJourney,
   type JourneyQuery,
 } from "./api";
 import {
@@ -16,10 +18,30 @@ import {
   type NotificationPermissionState,
 } from "./notifications";
 import { HomePage } from "./pages/HomePage";
-import { ChatWidget } from "./components/ChatWidget";
+import { ChatWidget, type ChatMessage } from "./components/ChatWidget";
 import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
-import type { Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
+import type { Corridor, Leg, Preference, RouteAlert, RouteOption, SubscriptionPlan } from "./types";
+
+const PLAN_STORAGE_KEY = "eirgo-plan";
+
+interface StoredPlan {
+  corridor: Corridor;
+  selections: Record<string, string>;
+  preference: Preference;
+}
+
+function loadStoredPlan(): StoredPlan | null {
+  try {
+    const raw = localStorage.getItem(PLAN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.corridor?.legs) return null;
+    return parsed as StoredPlan;
+  } catch {
+    return null;
+  }
+}
 
 const PAGES = ["home", "journey", "subscriptions"] as const;
 type Page = (typeof PAGES)[number];
@@ -85,7 +107,7 @@ export default function App() {
 
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
   const [isPro, setIsPro] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
+  const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
   const [myLocationEnabled, setMyLocationEnabled] = useState(false);
@@ -120,12 +142,19 @@ export default function App() {
   }, [font]);
 
   useEffect(() => {
-    fetchCorridor()
-      .then((c) => {
-        setCorridor(c);
-        setSelections(defaultSelections(c, "fastest"));
-      })
-      .catch(() => setLoadError("Could not load a route. Is the server running on port 4000?"));
+    const stored = loadStoredPlan();
+    if (stored) {
+      setCorridor(stored.corridor);
+      setSelections(stored.selections);
+      setPreference(stored.preference);
+    } else {
+      fetchCorridor()
+        .then((c) => {
+          setCorridor(c);
+          setSelections(defaultSelections(c, "fastest"));
+        })
+        .catch(() => setLoadError("Could not load a route. Is the server running on port 4000?"));
+    }
 
     fetchBillingStatus()
       .then((s) => setIsPro(s.isPro))
@@ -148,6 +177,26 @@ export default function App() {
 
     return unsubscribe;
   }, []);
+
+  // Keep the plan on screen across a page refresh, instead of always resetting
+  // to the sample corridor.
+  useEffect(() => {
+    if (!corridor) return;
+    try {
+      localStorage.setItem(
+        PLAN_STORAGE_KEY,
+        JSON.stringify({ corridor, selections, preference } satisfies StoredPlan)
+      );
+    } catch {
+      /* the plan just won't survive a refresh if storage is unavailable */
+    }
+  }, [corridor, selections, preference]);
+
+  // Tell the server which legs/trips are in view, so live alerts are filtered
+  // to this journey instead of broadcasting every disruption in Dublin.
+  useEffect(() => {
+    watchJourney(corridor);
+  }, [corridor]);
 
   function handlePreferenceChange(next: Preference) {
     setPreference(next);
@@ -178,16 +227,19 @@ export default function App() {
     return reply;
   }
 
+  function applyCorridor(c: Corridor) {
+    setCorridor(c);
+    setPreference("fastest");
+    setSelections(defaultSelections(c, "fastest"));
+    setOpenBreaks({});
+    setAlerts([]); // a previous journey's alerts don't apply to this one
+  }
+
   async function handleSearch(query: JourneyQuery) {
     setSearching(true);
     setSearchError(null);
     try {
-      const c = await searchJourney(query);
-      setCorridor(c);
-      setPreference("fastest");
-      setSelections(defaultSelections(c, "fastest"));
-      setOpenBreaks({});
-      setAlerts([]); // a previous journey's alerts don't apply to this one
+      applyCorridor(await searchJourney(query));
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Could not plan that journey.");
     } finally {
@@ -199,12 +251,7 @@ export default function App() {
     setSearching(true);
     setSearchError(null);
     try {
-      const c = await fetchCorridor();
-      setCorridor(c);
-      setPreference("fastest");
-      setSelections(defaultSelections(c, "fastest"));
-      setOpenBreaks({});
-      setAlerts([]);
+      applyCorridor(await fetchCorridor());
     } catch {
       setSearchError("Could not load the sample route.");
     } finally {
@@ -217,13 +264,24 @@ export default function App() {
     setNotifPermission(result);
   }
 
-  async function handleUpgrade() {
-    setUpgrading(true);
+  async function handleChatSend(message: string, history: readonly ChatMessage[]): Promise<string> {
+    const { reply, corridor: newCorridor } = await askConciergeChat(message, history, {
+      corridorName: corridor?.name,
+      preference,
+      recentAlerts: alerts.slice(0, 3),
+    });
+    if (newCorridor) applyCorridor(newCorridor);
+    return reply;
+  }
+
+  async function handleUpgrade(plan: SubscriptionPlan) {
+    if (upgrading) return;
+    setUpgrading(plan);
     try {
-      const { url } = await startCheckout();
+      const { url } = await startCheckout(plan);
       window.location.href = url;
     } catch {
-      setUpgrading(false);
+      setUpgrading(null);
       alert("Could not start checkout. Make sure STRIPE_SECRET_KEY is set in server/.env.");
     }
   }
@@ -313,7 +371,7 @@ export default function App() {
         <span>ÉirGo</span>
         <span>A clearer journey, one step at a time.</span>
       </footer>
-      <ChatWidget visible={page === "journey"} />
+      <ChatWidget visible={page === "journey"} onSend={handleChatSend} />
     </div>
   );
 }

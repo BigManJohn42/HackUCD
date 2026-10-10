@@ -18,7 +18,9 @@ function LiveBadge({ live }: { live?: LiveStatus }) {
 
 const stopLabel = (name: string, code?: string | null) => (code ? `${name} (stop ${code})` : name);
 
-/** Real journeys: spell out exactly what to board, where, and when. */
+/** Real journeys: spell out exactly what to board, where, and when. Scheduled
+ * rides have a boardAt time; synthesized walk/cycle alternatives don't, so
+ * they fall back to a plain duration line instead of a fake board/alight pair. */
 function RealStepDetails({ leg, option }: { leg: Leg; option: RouteOption }) {
   if (option.mode === "stay") {
     return (
@@ -28,8 +30,13 @@ function RealStepDetails({ leg, option }: { leg: Leg; option: RouteOption }) {
       </p>
     );
   }
-  if (option.mode === "walk") {
-    return <p className="leg-meta">Walk about {option.durationMin} min</p>;
+  if (option.boardAt === undefined) {
+    return (
+      <p className="leg-meta">
+        {option.mode === "walk" ? "Walk" : "Cycle"} about {option.durationMin} min
+        {option.notes ? ` · ${option.notes}` : ""}
+      </p>
+    );
   }
   return (
     <div className="ride-details">
@@ -67,36 +74,37 @@ export function ItineraryStep({
   const selected = leg.options.find((o) => o.id === selectedOptionId) ?? leg.options[0];
   const isReal = selected.boardAt !== undefined || selected.id.startsWith("real-");
   const isStay = selected.mode === "stay";
+  const hasAlternatives = leg.options.length > 1;
 
   return (
     <div className={`leg${isStay ? " leg-stay" : ""}`}>
       <div className="leg-title">
-        {isReal ? selected.label : <>{leg.from} &rarr; {leg.to}</>}
+        {isReal && !hasAlternatives ? selected.label : <>{leg.from} &rarr; {leg.to}</>}
       </div>
+
+      {hasAlternatives && (
+        <select
+          className="leg-option-select"
+          aria-label={`Choose how to travel from ${leg.from} to ${leg.to}`}
+          value={selected.id}
+          onChange={(e) => onSelectOption(e.target.value)}
+        >
+          {leg.options.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label} - {opt.durationMin} min
+            </option>
+          ))}
+        </select>
+      )}
 
       {isReal ? (
         <RealStepDetails leg={leg} option={selected} />
       ) : (
-        <>
-          <select
-            className="leg-option-select"
-            aria-label={`Choose how to travel from ${leg.from} to ${leg.to}`}
-            value={selected.id}
-            onChange={(e) => onSelectOption(e.target.value)}
-          >
-            {leg.options.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label} - {opt.durationMin} min
-              </option>
-            ))}
-          </select>
-
-          <p className="leg-meta">
-            {selected.durationMin} min
-            {selected.departures.length > 0 && ` · next: ${selected.departures.slice(0, 3).join(", ")}`}
-            {selected.notes ? ` · ${selected.notes}` : ""}
-          </p>
-        </>
+        <p className="leg-meta">
+          {selected.durationMin} min
+          {selected.departures.length > 0 && ` · next: ${selected.departures.slice(0, 3).join(", ")}`}
+          {selected.notes ? ` · ${selected.notes}` : ""}
+        </p>
       )}
 
       {leg.isTransferPoint && (
