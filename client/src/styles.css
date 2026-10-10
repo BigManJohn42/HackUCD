@@ -691,6 +691,30 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
+/* Repeatable stopover rows in the journey search form */
+.journey-search .stopover-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  padding: 4px 12px 12px;
+  margin-top: 12px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-bg);
+  border-radius: 0 9px 9px 0;
+}
+.journey-search .stopover-place {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.journey-search .stopover-hours {
+  flex: 0 1 110px;
+}
+.journey-search .stopover-remove {
+  flex: 0 0 auto;
+}
+.journey-search .add-stopover {
+  margin-top: 12px;
 .chat-widget {
   position: fixed;
   width: min(360px, calc(100% - 32px));

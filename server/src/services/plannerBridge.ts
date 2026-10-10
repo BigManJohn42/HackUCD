@@ -177,13 +177,13 @@ async function loadLive(): Promise<Map<string, TripUpdateRow[]> | null> {
 export interface RealJourneyOptions {
   depart?: string; // "HH:MM"
   vias?: string[];
-  stayMins?: number;
+  stayMins?: number[]; // one per via
 }
 
 export async function planRealJourney(
   from: string,
   to: string,
-  { depart, vias = [], stayMins = 120 }: RealJourneyOptions = {}
+  { depart, vias = [], stayMins = [] }: RealJourneyOptions = {}
 ): Promise<{ ok: true; corridor: Corridor } | { ok: false; error: string }> {
   // planner.js is untyped JS, so describe the result shape we rely on.
   let result: { ok: boolean; error?: string; segments: unknown[]; leaveAt: number; arriveAt: number };
@@ -276,7 +276,7 @@ export async function planRealJourney(
             co2Kg: 0,
             boardAt: fmtTime(segment.arriveAt),
             arriveAt: fmtTime(next.leaveAt),
-            notes: `You asked for ${stayMins} min; the next connection leaves at ${fmtTime(next.leaveAt)}`,
+            notes: `You asked for ${stayMins[segIndex] ?? 120} min; the next connection leaves at ${fmtTime(next.leaveAt)}`,
           },
         ],
       });
