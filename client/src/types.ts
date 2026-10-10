@@ -24,6 +24,7 @@ export interface Corridor {
   id: string;
   name: string;
   legs: Leg[];
+  stopCoords: Record<string, [number, number]>;
 }
 
 export type Preference = "fastest" | "fewest-transfers" | "cheapest";

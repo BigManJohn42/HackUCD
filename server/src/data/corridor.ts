@@ -107,4 +107,13 @@ export const belfieldToCityCentre: Corridor = {
       ],
     },
   ],
+  // Approximate real-world coordinates for each named stop, keyed to match
+  // the `from`/`to` strings above exactly, so the map can draw markers and a
+  // route line without needing a geocoding step.
+  stopCoords: {
+    "UCD Belfield (home end)": [53.3065, -6.223],
+    "UCD Belfield, Stillorgan Road": [53.3091, -6.225],
+    Dundrum: [53.2902, -6.246],
+    "St Stephen's Green": [53.3381, -6.2592],
+  },
 };

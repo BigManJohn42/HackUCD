@@ -12,6 +12,13 @@ import { ChatPanel } from "./components/ChatPanel";
 import { ItineraryStep } from "./components/ItineraryStep";
 import { PreferenceToggle } from "./components/PreferenceToggle";
 import { ProBanner } from "./components/ProBanner";
+import { RouteMap } from "./components/RouteMap";
+import {
+  getNotificationPermission,
+  notifyRouteAlert,
+  requestNotificationPermission,
+  type NotificationPermissionState,
+} from "./notifications";
 import type { ChatMessage, Corridor, Leg, Preference, RouteAlert, RouteOption } from "./types";
 
 const TRANSIT_MODES = new Set(["bus", "luas", "rail"]);
@@ -43,6 +50,8 @@ export default function App() {
   const [isPro, setIsPro] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
+  const [myLocationEnabled, setMyLocationEnabled] = useState(false);
 
   useEffect(() => {
     fetchCorridor()
@@ -56,8 +65,11 @@ export default function App() {
       .then((s) => setIsPro(s.isPro))
       .catch(() => undefined);
 
+    setNotifPermission(getNotificationPermission());
+
     const unsubscribe = subscribeToAlerts((alert) => {
       setAlerts((prev) => [alert, ...prev].slice(0, 5));
+      notifyRouteAlert(alert);
     });
 
     const params = new URLSearchParams(window.location.search);
@@ -115,6 +127,11 @@ export default function App() {
         { role: "assistant", content: "Sorry, I couldn't reach the concierge just now." },
       ]);
     }
+  }
+
+  async function handleEnableNotifications() {
+    const result = await requestNotificationPermission();
+    setNotifPermission(result);
   }
 
   async function handleUpgrade() {
@@ -184,6 +201,23 @@ export default function App() {
             <div><span>Total cost</span>&euro;{totals.costEuro.toFixed(2)}</div>
             <div><span>CO2</span>{totals.co2Kg.toFixed(1)} kg</div>
           </div>
+        )}
+      </div>
+
+      <RouteMap corridor={corridor} selections={selections} myLocationEnabled={myLocationEnabled} />
+
+      <div className="card map-controls">
+        <button type="button" className="btn-secondary" onClick={() => setMyLocationEnabled((v) => !v)}>
+          {myLocationEnabled ? "Hide my location" : "Show my location on map"}
+        </button>
+        {notifPermission === "granted" ? (
+          <span className="notif-status">Delay notifications are on</span>
+        ) : notifPermission === "denied" ? (
+          <span className="notif-status">Notifications blocked - enable them in your browser's site settings</span>
+        ) : notifPermission === "unsupported" ? null : (
+          <button type="button" className="btn-secondary" onClick={handleEnableNotifications}>
+            Enable delay notifications
+          </button>
         )}
       </div>
 
