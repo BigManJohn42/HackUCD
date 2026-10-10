@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { searchPlaces, type JourneyQuery } from "../api";
+import { FREE_PLAN_LIMIT } from "../planAllowance";
 
 /** Debounced stop-name suggestions for one input. */
 function useSuggestions(query: string): string[] {
@@ -65,11 +66,13 @@ export function JourneySearchForm({
   onLoadSample,
   searching,
   error,
+  freePlansLeft,
 }: {
   onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
   searching: boolean;
   error: string | null;
+  freePlansLeft: number | null; // null = Pro (unlimited)
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -84,7 +87,8 @@ export function JourneySearchForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!from.trim() || !to.trim()) return;
+    // Out of free plans: the button is an upgrade link, so don't insist on filled-in places.
+    if (freePlansLeft !== 0 && (!from.trim() || !to.trim())) return;
     onSearch({
       from: from.trim(),
       to: to.trim(),
@@ -159,12 +163,21 @@ export function JourneySearchForm({
 
       <div className="leg-actions" style={{ marginTop: 12 }}>
         <button type="submit" className="btn-primary" disabled={searching}>
-          {searching ? "Finding your route..." : "Find my route"}
+          {searching ? "Finding your route..." : freePlansLeft === 0 ? "Upgrade to keep planning" : "Find my route"}
         </button>
         <button type="button" className="btn-secondary" onClick={onLoadSample} disabled={searching}>
           Try the sample UCD route
         </button>
       </div>
+      {freePlansLeft !== null && (
+        <p className={`free-plans${freePlansLeft <= 1 ? " free-plans-low" : ""}`}>
+          {freePlansLeft > 0
+            ? `${freePlansLeft} of ${FREE_PLAN_LIMIT} free journey plans left`
+            : "You've used all your free journey plans"}
+          {" · "}
+          <a href="#/subscriptions">Get unlimited with Pro</a>
+        </p>
+      )}
       <p className="leg-meta" style={{ marginTop: 10, marginBottom: 0 }}>
         Real stops and timetables from Ireland's National Transport Authority, with live delays
         where available. Type a few letters for suggestions - stop names work best.

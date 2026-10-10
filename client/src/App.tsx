@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { alertImpact, alertSubject, liveStatusFromAlert } from "./alertImpact";
+import { FREE_PLAN_LIMIT, freePlansUsed, recordFreePlan } from "./planAllowance";
 import {
   askConcierge,
   askConciergeChat,
@@ -117,6 +118,9 @@ export default function App() {
   corridorRef.current = corridor;
   selectionsRef.current = selections;
   const [isPro, setIsPro] = useState(false);
+  const [freeUsed, setFreeUsed] = useState(freePlansUsed);
+  const [planLimitHit, setPlanLimitHit] = useState(false);
+  const freePlansLeft = isPro ? null : Math.max(0, FREE_PLAN_LIMIT - freeUsed);
   const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
@@ -306,11 +310,25 @@ export default function App() {
     setAlerts([]); // a previous journey's alerts don't apply to this one
   }
 
+  /** Free users get FREE_PLAN_LIMIT real journey plans; after that, the planner sends them to Pro. */
+  function outOfFreePlans(): boolean {
+    if (isPro || freePlansUsed() < FREE_PLAN_LIMIT) return false;
+    setPlanLimitHit(true);
+    window.location.hash = "#/subscriptions";
+    return true;
+  }
+
+  function countFreePlan() {
+    if (!isPro) setFreeUsed(recordFreePlan());
+  }
+
   async function handleSearch(query: JourneyQuery) {
+    if (outOfFreePlans()) return;
     setSearching(true);
     setSearchError(null);
     try {
       applyCorridor(await searchJourney(query));
+      countFreePlan(); // only successful plans use up the allowance; the sample route is free
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Could not plan that journey.");
     } finally {
@@ -341,7 +359,13 @@ export default function App() {
       preference,
       recentAlerts: alerts.slice(0, 3),
     });
-    if (newCorridor) applyCorridor(newCorridor);
+    if (newCorridor) {
+      if (outOfFreePlans()) {
+        return `${reply}\n\nYou've used your ${FREE_PLAN_LIMIT} free journey plans - upgrade to ÉirGo Pro to see this route and keep planning.`;
+      }
+      applyCorridor(newCorridor);
+      countFreePlan();
+    }
     return reply;
   }
 
@@ -390,6 +414,7 @@ export default function App() {
     onSearch: handleSearch,
     onLoadSample: handleLoadSample,
     totals,
+    freePlansLeft,
   };
 
   return (
@@ -435,7 +460,12 @@ export default function App() {
         {page === "home" && <HomePage />}
         {page === "journey" && <JourneyPlannerPage {...plannerProps} />}
         {page === "subscriptions" && (
-          <SubscriptionsPage isPro={isPro} upgrading={upgrading} onUpgrade={handleUpgrade} />
+          <SubscriptionsPage
+            isPro={isPro}
+            upgrading={upgrading}
+            onUpgrade={handleUpgrade}
+            limitReached={planLimitHit && !isPro}
+          />
         )}
       </main>
 

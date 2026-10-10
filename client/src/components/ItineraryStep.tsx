@@ -16,6 +16,10 @@ function LiveBadge({ live }: { live?: LiveStatus }) {
   return <span className={`live-badge live-${live.status}`}>Live: {text}</span>;
 }
 
+/** "45 min", "2h 05m", "23h 03m" */
+const formatStay = (mins: number) =>
+  mins >= 60 ? `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m` : `${mins} min`;
+
 const stopLabel = (name: string, code?: string | null) => (code ? `${name} (stop ${code})` : name);
 
 /** Real journeys: spell out exactly what to board, where, and when. Scheduled
@@ -25,7 +29,7 @@ function RealStepDetails({ leg, option }: { leg: Leg; option: RouteOption }) {
   if (option.mode === "stay") {
     return (
       <p className="leg-meta">
-        Arrive {option.boardAt} &middot; leave {option.arriveAt} &middot; {option.durationMin} min here
+        Arrive {option.boardAt} &middot; leave {option.arriveAt} &middot; {formatStay(option.durationMin)} here
         {option.notes ? ` · ${option.notes}` : ""}
       </p>
     );

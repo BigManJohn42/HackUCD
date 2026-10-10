@@ -27,6 +27,7 @@ export interface PlannerPanelProps {
   onSearch: (query: JourneyQuery) => void;
   onLoadSample: () => void;
   totals: { durationMin: number } | null;
+  freePlansLeft: number | null; // null = Pro (unlimited)
 }
 
 export function PlannerPanel({
@@ -49,12 +50,19 @@ export function PlannerPanel({
   onSearch,
   onLoadSample,
   totals,
+  freePlansLeft,
 }: PlannerPanelProps) {
   const showPreferenceToggle = !!corridor && corridor.legs.some((l) => l.options.length > 1);
 
   return (
     <>
-      <JourneySearchForm onSearch={onSearch} onLoadSample={onLoadSample} searching={searching} error={searchError} />
+      <JourneySearchForm
+        onSearch={onSearch}
+        onLoadSample={onLoadSample}
+        searching={searching}
+        error={searchError}
+        freePlansLeft={freePlansLeft}
+      />
 
       <AlertToasts alerts={alerts} corridor={corridor} selections={selections} onDismiss={onDismissAlert} />
 

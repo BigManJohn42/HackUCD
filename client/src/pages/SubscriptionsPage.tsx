@@ -1,3 +1,4 @@
+import { FREE_PLAN_LIMIT } from "../planAllowance";
 import type { SubscriptionPlan } from "../types";
 
 const PLANS: { id: SubscriptionPlan; label: string; price: string; period: string }[] = [
@@ -6,6 +7,7 @@ const PLANS: { id: SubscriptionPlan; label: string; price: string; period: strin
 ];
 
 const BENEFITS = [
+  "Unlimited journey plans",
   "Unlimited saved itineraries",
   "Richer, more detailed AI break recommendations",
   "Priority support during live disruptions",
@@ -15,13 +17,21 @@ export function SubscriptionsPage({
   isPro,
   upgrading,
   onUpgrade,
+  limitReached = false,
 }: {
   isPro: boolean;
   upgrading: SubscriptionPlan | null;
   onUpgrade: (plan: SubscriptionPlan) => void;
+  limitReached?: boolean; // sent here by the planner after the free plans ran out
 }) {
   return (
     <section>
+      {limitReached && (
+        <div className="limit-banner" role="status">
+          <strong>You've used your {FREE_PLAN_LIMIT} free journey plans.</strong>
+          <span>Upgrade to ÉirGo Pro for unlimited journey planning.</span>
+        </div>
+      )}
       <div className="page-heading">
         <span className="eyebrow">Explore the plans</span>
         <h1>A plan for your routine.</h1>
