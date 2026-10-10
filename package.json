@@ -6,9 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "delays": "node --env-file-if-exists=.env scripts/delays.js",
-    "gtfs:update": "node --env-file-if-exists=.env scripts/gtfs-update.js",
+    "gtfs:update": "node --env-file-if-exists=.env scripts/gtfs-update.js && node --disable-warning=ExperimentalWarning scripts/gtfs-index.js",
     "stops": "node scripts/stops.js",
-    "trains": "node scripts/trains.js"
+    "trains": "node scripts/trains.js",
+    "gtfs:index": "node --disable-warning=ExperimentalWarning scripts/gtfs-index.js",
+    "buses": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/buses.js"
   },
   "repository": {
     "type": "git",

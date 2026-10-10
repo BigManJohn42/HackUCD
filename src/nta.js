@@ -14,7 +14,10 @@ async function fetchFeed(feed) {
   const apiKey = process.env.NTA_API_KEY;
   if (!apiKey) throw new Error("NTA_API_KEY is not set (put it in .env)");
 
-  const res = await fetch(`${BASE_URL}/${feed}`, { headers: { "x-api-key": apiKey } });
+  const res = await fetch(`${BASE_URL}/${feed}`, {
+    headers: { "x-api-key": apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!res.ok) {
     throw new Error(`NTA ${feed} request failed: ${res.status} ${res.statusText}`);
   }
