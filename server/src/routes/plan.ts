@@ -4,7 +4,7 @@ import { planRealJourney } from "../services/plannerBridge.js";
 
 export const planRouter = Router();
 
-// GET /api/plan?from=UCD&to=Galway[&via=Athlone][&via=...][&stay=120][&depart=08:30]
+// GET /api/plan?from=UCD&to=Galway[&via=Athlone&stay=120][&via=...&stay=...][&depart=08:30]
 planRouter.get("/plan", async (req, res) => {
   const { from, to, depart, via, stay } = req.query;
   if (typeof from !== "string" || typeof to !== "string" || !from.trim() || !to.trim()) {
@@ -19,8 +19,16 @@ planRouter.get("/plan", async (req, res) => {
     .filter((v): v is string => typeof v === "string")
     .map((v) => v.trim())
     .filter(Boolean);
-  const stayMins = stay === undefined || stay === "" ? 120 : Number(stay);
-  if (!Number.isFinite(stayMins) || stayMins < 0 || stayMins > 3 * 24 * 60) {
+  // Each stay pairs with the via in the same position; a single stay applies to all vias.
+  const stayList = (Array.isArray(stay) ? stay : stay === undefined ? [] : [stay]).map((s) =>
+    s === "" ? 120 : Number(s)
+  );
+  const stayMins = vias.map((_, k) => stayList[k] ?? (stayList.length === 1 ? stayList[0] : 120));
+  if (vias.length > 5) {
+    res.status(400).json({ error: "at most 5 stopovers" });
+    return;
+  }
+  if (stayMins.some((m) => !Number.isFinite(m) || m < 0 || m > 3 * 24 * 60)) {
     res.status(400).json({ error: "stay must be a number of minutes (0 - 4320)" });
     return;
   }

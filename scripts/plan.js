@@ -4,6 +4,7 @@
 //   npm run plan ucd heuston
 //   npm run plan ucd galway via athlone              (2 hour stopover in Athlone)
 //   npm run plan ucd galway via athlone stay 90      (90 minute stopover)
+//   npm run plan ucd cork via kildare stay 60 via limerick junction stay 30   (several stopovers)
 //   npm run plan ucd eyre square depart 08:30 date 2026-10-12
 //   npm run plan ucd heuston json                    (raw result for the frontend)
 import { planJourney, matchQuality, fmt } from "../src/planner.js";
@@ -16,13 +17,20 @@ const keyword = (tok) => {
 
 const words = [];
 const vias = [];
+const stays = [];
+let defaultStay = 120;
 const opts = {};
 const argv = process.argv.slice(2).filter((a) => a !== "--");
 for (let i = 0; i < argv.length; i++) {
   const k = keyword(argv[i]);
   if (!k) words.push(argv[i]);
   else if (k === "json") opts.json = true;
-  else if (k === "stay") opts.stayMins = Number(argv[++i]);
+  // "stay" applies to the via just before it; before any via it's the default for all of them
+  else if (k === "stay") {
+    const mins = Number(argv[++i]);
+    if (vias.length) stays[vias.length - 1] = mins;
+    else defaultStay = mins;
+  }
   else if (k === "depart") opts.depart = argv[++i];
   else if (k === "date") opts.date = argv[++i];
   else {
@@ -59,6 +67,7 @@ const positional = [from, to];
 const started = Date.now();
 let result;
 try {
+  opts.stayMins = vias.map((_, k) => stays[k] ?? defaultStay);
   result = planJourney({ from: positional[0], to: positional[1], vias, ...opts, log: (msg) => console.error(msg) });
 } catch (err) {
   console.error(err.message);
@@ -91,7 +100,8 @@ result.segments.forEach((seg, k) => {
   }
   if (seg.destWalk.secs > 60) console.log(`  ${fmt(seg.arriveAt - seg.destWalk.secs)}  Walk ${mins(seg.destWalk.secs)} to ${seg.to} (arrive)`);
   if (k < result.segments.length - 1) {
-    console.log(`\n  -- Stopover in ${seg.to}: ${duration(result.stayMins * 60)} (${fmt(seg.arriveAt)} - ${fmt(seg.arriveAt + result.stayMins * 60)}) --`);
+    const stay = result.stays[k] * 60;
+    console.log(`\n  -- Stopover in ${seg.to}: ${duration(stay)} (${fmt(seg.arriveAt)} - ${fmt(seg.arriveAt + stay)}) --`);
   }
 });
 
