@@ -53,12 +53,13 @@ export async function askConcierge(message: string, context: ChatContext): Promi
       "X-Title": "Commute Concierge",
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || "anthropic/claude-3.5-haiku",
+      model: process.env.OPENROUTER_MODEL || "anthropic/claude-haiku-4.5",
       messages: [
         { role: "system", content: buildSystemPrompt(context) },
         { role: "user", content: message },
       ],
       temperature: 0.4,
+      max_tokens: 400,
     }),
   });
 
