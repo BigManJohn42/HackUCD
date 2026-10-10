@@ -89,11 +89,18 @@ const minutes = (secs: number) => Math.max(1, Math.round(secs / 60));
 function liveStatusFor(updates: TripUpdateRow[] | undefined, stopId: string | undefined): LiveStatus {
   if (!updates) return { status: "scheduled" };
   if (updates.some((u) => u.tripStatus === "CANCELED")) return { status: "cancelled" };
-  // Use the update for our stop, else the latest one before it (delays carry forward).
-  const here = updates.find((u) => u.stopId === stopId) ?? updates.filter((u) => u.delay != null).at(-1);
+  // Use the update for our stop; otherwise the vehicle's next upcoming stop (lowest sequence),
+  // since GTFS-R delays propagate forward to later stops - never a far-downstream update.
+  const here =
+    updates.find((u) => u.stopId === stopId) ??
+    updates
+      .filter((u) => u.delay != null)
+      .sort((a, b) => (a.stopSequence ?? Infinity) - (b.stopSequence ?? Infinity))[0];
   if (here?.stopStatus === "SKIPPED") return { status: "skipped" };
   const delayMin = Math.round((here?.delay ?? 0) / 60);
   if (delayMin > 0) return { status: "late", delayMin };
+  // Vehicles rarely run more than a few minutes early; bigger values are bad trip matches.
+  if (delayMin < -5) return { status: "scheduled" };
   if (delayMin < 0) return { status: "early", delayMin };
   return { status: "on-time", delayMin: 0 };
 }
@@ -144,7 +151,9 @@ function rideOption(leg: PlannerLeg, id: string, live: Map<string, TripUpdateRow
     fromStopCode: leg.fromCode,
     toStopCode: leg.toCode,
     laterDepartures: laterDeparturesFor(leg, stopId),
-    live: live && tripId ? liveStatusFor(live.get(tripId), stopId) : undefined,
+    // Luas runs to a frequency, and its GTFS-R delays are matched to the wrong scheduled
+    // trips (often an hour "early"), so only trust live data for buses and trains.
+    live: live && tripId && mode !== "luas" ? liveStatusFor(live.get(tripId), stopId) : undefined,
   };
 }
 
