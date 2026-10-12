@@ -3,9 +3,10 @@ import { ItineraryStep } from "./ItineraryStep";
 import { JourneySearchForm } from "./JourneySearchForm";
 import { PreferenceToggle } from "./PreferenceToggle";
 import { RouteMap } from "./RouteMap";
+import { SavedRoutesPanel } from "./SavedRoutesPanel";
 import type { Corridor, Leg, Preference, RouteAlert } from "../types";
 import type { NotificationPermissionState } from "../notifications";
-import type { JourneyQuery } from "../api";
+import type { JourneyQuery, SavedRoute } from "../api";
 
 export interface PlannerPanelProps {
   corridor: Corridor | null;
@@ -28,6 +29,14 @@ export interface PlannerPanelProps {
   onLoadSample: () => void;
   totals: { durationMin: number } | null;
   freePlansLeft: number | null; // null = Pro (unlimited)
+  savedRoutes: SavedRoute[];
+  onLoadSavedRoute: (route: SavedRoute) => void;
+  onDeleteSavedRoute: (route: SavedRoute) => void;
+  loadingSavedRouteId: string | null;
+  canSaveRoute: boolean;
+  onSaveRoute: () => void;
+  savingRoute: boolean;
+  routeJustSaved: boolean;
 }
 
 export function PlannerPanel({
@@ -51,11 +60,26 @@ export function PlannerPanel({
   onLoadSample,
   totals,
   freePlansLeft,
+  savedRoutes,
+  onLoadSavedRoute,
+  onDeleteSavedRoute,
+  loadingSavedRouteId,
+  canSaveRoute,
+  onSaveRoute,
+  savingRoute,
+  routeJustSaved,
 }: PlannerPanelProps) {
   const showPreferenceToggle = !!corridor && corridor.legs.some((l) => l.options.length > 1);
 
   return (
     <>
+      <SavedRoutesPanel
+        routes={savedRoutes}
+        onLoad={onLoadSavedRoute}
+        onDelete={onDeleteSavedRoute}
+        loadingId={loadingSavedRouteId}
+      />
+
       <JourneySearchForm
         onSearch={onSearch}
         onLoadSample={onLoadSample}
@@ -86,6 +110,13 @@ export function PlannerPanel({
                     ? `${Math.floor(totals.durationMin / 60)}h ${String(totals.durationMin % 60).padStart(2, "0")}m`
                     : `${totals.durationMin} min`}
                 </div>
+              </div>
+            )}
+            {canSaveRoute && (
+              <div className="leg-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn-secondary" onClick={onSaveRoute} disabled={savingRoute}>
+                  {savingRoute ? "Saving..." : routeJustSaved ? "Saved!" : "Save this route"}
+                </button>
               </div>
             )}
           </div>

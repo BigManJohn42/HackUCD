@@ -127,6 +127,41 @@ export function confirmCheckout(sessionId: string): Promise<{ isPro: boolean }> 
   );
 }
 
+export interface SavedRoute {
+  id: string;
+  userId: string;
+  name: string;
+  from: string;
+  to: string;
+  stopovers: { place: string; stayMins: number }[];
+  createdAt: string;
+}
+
+export function fetchSavedRoutes(): Promise<SavedRoute[]> {
+  return apiFetch("/api/saved-routes")
+    .then((r) => asJson<{ routes: SavedRoute[] }>(r))
+    .then((r) => r.routes);
+}
+
+export function saveRoute(query: JourneyQuery, name?: string): Promise<SavedRoute> {
+  return apiFetch("/api/saved-routes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      from: query.from,
+      to: query.to,
+      stopovers: (query.stopovers ?? []).map((s) => ({ place: s.place, stayMins: s.stayMins })),
+    }),
+  })
+    .then((r) => asJson<{ route: SavedRoute }>(r))
+    .then((r) => r.route);
+}
+
+export function deleteSavedRoute(id: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/saved-routes/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => asJson(r));
+}
+
 let socket: Socket | null = null;
 
 function getSocket(): Socket {

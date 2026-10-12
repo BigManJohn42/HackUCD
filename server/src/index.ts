@@ -13,6 +13,7 @@ import { planRouter } from "./routes/plan.js";
 import { geometryRouter } from "./routes/geometry.js";
 import { pushRouter } from "./routes/push.js";
 import { authRouter } from "./routes/auth.js";
+import { savedRoutesRouter } from "./routes/savedRoutes.js";
 import { optionalAuth } from "./middleware/auth.js";
 import { startLiveFeed } from "./services/liveFeed.js";
 import type { WatchedLeg } from "./types.js";
@@ -45,6 +46,7 @@ app.use("/api", billingRouter);
 app.use("/api", planRouter);
 app.use("/api", geometryRouter);
 app.use("/api", pushRouter);
+app.use("/api", savedRoutesRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

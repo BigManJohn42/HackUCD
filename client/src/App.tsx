@@ -5,15 +5,19 @@ import {
   askConcierge,
   askConciergeChat,
   confirmCheckout,
+  deleteSavedRoute,
   fetchBillingStatus,
   fetchCorridor,
   fetchCurrentUser,
+  fetchSavedRoutes,
+  saveRoute,
   searchJourney,
   startCheckout,
   subscribeToAlerts,
   watchJourney,
   type AuthUser,
   type JourneyQuery,
+  type SavedRoute,
 } from "./api";
 import {
   getNotificationPermission,
@@ -177,6 +181,11 @@ export default function App() {
   // server's real count (not resettable by clearing storage) takes over.
   const freePlansLeft = user ? billingFreePlansLeft : isPro ? null : Math.max(0, FREE_PLAN_LIMIT - freeUsed);
   const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [lastQuery, setLastQuery] = useState<JourneyQuery | null>(null);
+  const [savingRoute, setSavingRoute] = useState(false);
+  const [routeJustSaved, setRouteJustSaved] = useState(false);
+  const [loadingSavedRouteId, setLoadingSavedRouteId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
   const [myLocationEnabled, setMyLocationEnabled] = useState(false);
@@ -229,10 +238,13 @@ export default function App() {
       .then((u) => {
         setUser(u);
         if (!u) return;
-        return fetchBillingStatus().then((s) => {
-          setIsPro(s.isPro);
-          setBillingFreePlansLeft(s.freePlansLeft);
-        });
+        return Promise.all([
+          fetchBillingStatus().then((s) => {
+            setIsPro(s.isPro);
+            setBillingFreePlansLeft(s.freePlansLeft);
+          }),
+          fetchSavedRoutes().then(setSavedRoutes),
+        ]);
       })
       .catch(() => undefined);
 
@@ -441,10 +453,42 @@ export default function App() {
     try {
       applyCorridor(await searchJourney(query));
       countFreePlan(); // only successful plans use up the allowance; the sample route is free
+      setLastQuery(query);
+      setRouteJustSaved(false);
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Could not plan that journey.");
     } finally {
       setSearching(false);
+      setLoadingSavedRouteId(null);
+    }
+  }
+
+  async function handleSaveRoute() {
+    if (!lastQuery || savingRoute) return;
+    setSavingRoute(true);
+    try {
+      const route = await saveRoute(lastQuery);
+      setSavedRoutes((prev) => [route, ...prev]);
+      setRouteJustSaved(true);
+    } catch {
+      alert("Could not save this route. Please try again.");
+    } finally {
+      setSavingRoute(false);
+    }
+  }
+
+  function handleLoadSavedRoute(route: SavedRoute) {
+    setLoadingSavedRouteId(route.id);
+    handleSearch({ from: route.from, to: route.to, stopovers: route.stopovers });
+  }
+
+  async function handleDeleteSavedRoute(route: SavedRoute) {
+    setSavedRoutes((prev) => prev.filter((r) => r.id !== route.id));
+    try {
+      await deleteSavedRoute(route.id);
+    } catch {
+      // Re-sync with the server if the delete didn't actually go through.
+      fetchSavedRoutes().then(setSavedRoutes).catch(() => undefined);
     }
   }
 
@@ -550,6 +594,16 @@ export default function App() {
     onLoadSample: handleLoadSample,
     totals,
     freePlansLeft,
+    savedRoutes,
+    onLoadSavedRoute: handleLoadSavedRoute,
+    onDeleteSavedRoute: handleDeleteSavedRoute,
+    loadingSavedRouteId,
+    // Only a real, just-searched journey can be saved - the sample route and a
+    // corridor restored from localStorage on refresh don't have a matching query.
+    canSaveRoute: !!user && !!lastQuery && !!corridor?.summary,
+    onSaveRoute: handleSaveRoute,
+    savingRoute,
+    routeJustSaved,
   };
 
   return (
@@ -614,9 +668,11 @@ export default function App() {
                     setBillingFreePlansLeft(s.freePlansLeft);
                   })
                   .catch(() => undefined);
+                fetchSavedRoutes().then(setSavedRoutes).catch(() => undefined);
               } else {
                 setIsPro(false);
                 setBillingFreePlansLeft(null);
+                setSavedRoutes([]);
               }
             }}
           />
