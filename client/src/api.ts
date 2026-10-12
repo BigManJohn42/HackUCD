@@ -10,8 +10,48 @@ async function asJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// The server runs on a different port than Vite's dev server, so the session
+// cookie only gets sent if every request explicitly opts in.
+function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, credentials: "include" });
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+export function signup(email: string, password: string): Promise<{ user: AuthUser }> {
+  return apiFetch("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then((r) => asJson(r));
+}
+
+export function login(email: string, password: string): Promise<{ user: AuthUser }> {
+  return apiFetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then((r) => asJson(r));
+}
+
+export function logout(): Promise<{ ok: true }> {
+  return apiFetch("/api/auth/logout", { method: "POST" }).then((r) => asJson(r));
+}
+
+/** Resolves to null (not an error) when nobody's signed in - that's a normal state. */
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  const res = await apiFetch("/api/auth/me");
+  if (res.status === 401) return null;
+  const { user } = await asJson<{ user: AuthUser }>(res);
+  return user;
+}
+
 export function fetchCorridor(): Promise<Corridor> {
-  return fetch("/api/corridor").then((r) => asJson<Corridor>(r));
+  return apiFetch("/api/corridor").then((r) => asJson<Corridor>(r));
 }
 
 export interface JourneyQuery {
@@ -28,12 +68,12 @@ export function searchJourney({ from, to, stopovers = [], depart }: JourneyQuery
     params.append("stay", String(s.stayMins));
   }
   if (depart) params.set("depart", depart);
-  return fetch(`/api/plan?${params.toString()}`).then((r) => asJson<Corridor>(r));
+  return apiFetch(`/api/plan?${params.toString()}`).then((r) => asJson<Corridor>(r));
 }
 
 export function searchPlaces(query: string): Promise<string[]> {
   if (query.trim().length < 2) return Promise.resolve([]);
-  return fetch(`/api/places?q=${encodeURIComponent(query.trim())}`)
+  return apiFetch(`/api/places?q=${encodeURIComponent(query.trim())}`)
     .then((r) => asJson<{ places: string[] }>(r))
     .then((r) => r.places);
 }
@@ -42,7 +82,7 @@ export function askConcierge(
   message: string,
   context: Record<string, unknown>
 ): Promise<{ reply: string }> {
-  return fetch("/api/chat", {
+  return apiFetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, context }),
@@ -55,19 +95,24 @@ export function askConciergeChat(
   history: readonly ChatMessage[],
   context: Record<string, unknown>
 ): Promise<{ reply: string; corridor?: Corridor }> {
-  return fetch("/api/chat", {
+  return apiFetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history, context: { ...context, allowPlanning: true } }),
   }).then((r) => asJson<{ reply: string; corridor?: Corridor }>(r));
 }
 
-export function fetchBillingStatus(): Promise<{ isPro: boolean }> {
-  return fetch("/api/billing/status").then((r) => asJson(r));
+export function fetchBillingStatus(): Promise<{
+  isPro: boolean;
+  plan: SubscriptionPlan | null;
+  status: string;
+  freePlansLeft: number | null;
+}> {
+  return apiFetch("/api/billing/status").then((r) => asJson(r));
 }
 
 export function startCheckout(plan: SubscriptionPlan = "monthly"): Promise<{ url: string }> {
-  return fetch("/api/billing/create-checkout-session", {
+  return apiFetch("/api/billing/create-checkout-session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ plan }),
@@ -77,7 +122,7 @@ export function startCheckout(plan: SubscriptionPlan = "monthly"): Promise<{ url
 }
 
 export function confirmCheckout(sessionId: string): Promise<{ isPro: boolean }> {
-  return fetch(`/api/billing/confirm?session_id=${encodeURIComponent(sessionId)}`).then((r) =>
+  return apiFetch(`/api/billing/confirm?session_id=${encodeURIComponent(sessionId)}`).then((r) =>
     asJson(r)
   );
 }

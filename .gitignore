@@ -3,3 +3,4 @@ dist/
 .env
 data/
 .vapid-keys.json
+.jwt-secret

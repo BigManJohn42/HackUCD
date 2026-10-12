@@ -2,17 +2,21 @@ import "dotenv/config";
 import dotenv from "dotenv";
 import path from "node:path";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { itineraryRouter } from "./routes/itinerary.js";
 import { chatRouter } from "./routes/chat.js";
-import { billingRouter } from "./routes/billing.js";
+import { billingRouter, billingWebhookHandler } from "./routes/billing.js";
 import { planRouter } from "./routes/plan.js";
 import { geometryRouter } from "./routes/geometry.js";
 import { pushRouter } from "./routes/push.js";
+import { authRouter } from "./routes/auth.js";
+import { optionalAuth } from "./middleware/auth.js";
 import { startLiveFeed } from "./services/liveFeed.js";
 import type { WatchedLeg } from "./types.js";
+import "./db/db.js"; // opens the DB and runs schema setup on import
 
 // NTA_API_KEY and GTFS_FEED live in the repo-root .env (shared with the
 // standalone `npm run delays`/`plan` scripts there) rather than server/.env;
@@ -23,9 +27,18 @@ const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 
 const app = express();
-app.use(cors({ origin: CLIENT_ORIGIN }));
-app.use(express.json());
+app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 
+// Stripe webhook signature verification needs the exact raw request bytes,
+// so this is registered with express.raw() BEFORE the global JSON parser
+// below touches the body.
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), billingWebhookHandler);
+
+app.use(express.json());
+app.use(cookieParser());
+app.use(optionalAuth);
+
+app.use("/api", authRouter);
 app.use("/api", itineraryRouter);
 app.use("/api", chatRouter);
 app.use("/api", billingRouter);

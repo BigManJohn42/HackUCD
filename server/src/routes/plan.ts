@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { findStops } from "../../../src/timetable.js";
 import { planRealJourney } from "../services/plannerBridge.js";
+import { getSubscriptionStatus } from "../services/stripe.js";
+import { FREE_PLAN_LIMIT, getUsage, incrementUsage } from "../services/planUsage.js";
 
 export const planRouter = Router();
 
@@ -10,6 +12,20 @@ planRouter.get("/plan", async (req, res) => {
   if (typeof from !== "string" || typeof to !== "string" || !from.trim() || !to.trim()) {
     res.status(400).json({ error: "from and to are required" });
     return;
+  }
+
+  // Anonymous users get a soft, client-side-tracked trial (see planAllowance.ts) so
+  // signup isn't required just to try the product. Once signed in, this is the real,
+  // account-tied limit - not resettable by clearing browser storage.
+  if (req.user) {
+    const { isPro } = getSubscriptionStatus(req.user.id);
+    if (!isPro && getUsage(req.user.id) >= FREE_PLAN_LIMIT) {
+      res.status(403).json({
+        error: `You've used all ${FREE_PLAN_LIMIT} free journey plans. Upgrade to ÉirGo Pro for unlimited planning.`,
+        limitReached: true,
+      });
+      return;
+    }
   }
   if (depart !== undefined && (typeof depart !== "string" || !/^\d{1,2}:\d{2}$/.test(depart))) {
     res.status(400).json({ error: "depart must be HH:MM" });
@@ -41,6 +57,10 @@ planRouter.get("/plan", async (req, res) => {
   if (!result.ok) {
     res.status(404).json({ error: result.error });
     return;
+  }
+  if (req.user) {
+    const { isPro } = getSubscriptionStatus(req.user.id);
+    if (!isPro) incrementUsage(req.user.id);
   }
   res.json(result.corridor);
 });

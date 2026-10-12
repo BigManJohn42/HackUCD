@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { askConcierge, askConciergeWithTools } from "../services/openrouter.js";
-import { getProStatus } from "../services/stripe.js";
+import { getSubscriptionStatus } from "../services/stripe.js";
 import type { ChatContext, ChatTurn } from "../types.js";
 
 export const chatRouter = Router();
@@ -16,16 +16,20 @@ chatRouter.post("/chat", async (req, res) => {
     return;
   }
 
+  // Anonymous users get the free-tier prompt; richer Pro behaviour only
+  // applies once we know who they are and that they're actually subscribed.
+  const isPro = req.user ? getSubscriptionStatus(req.user.id).isPro : false;
+
   try {
     if (context?.allowPlanning) {
       const result = await askConciergeWithTools(message, Array.isArray(history) ? history : [], {
         ...context,
-        isPro: getProStatus(),
+        isPro,
       });
       res.json(result);
       return;
     }
-    const reply = await askConcierge(message, { ...context, isPro: getProStatus() });
+    const reply = await askConcierge(message, { ...context, isPro });
     res.json({ reply });
   } catch (err) {
     console.error("[chat] OpenRouter request failed:", err);

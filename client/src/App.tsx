@@ -7,10 +7,12 @@ import {
   confirmCheckout,
   fetchBillingStatus,
   fetchCorridor,
+  fetchCurrentUser,
   searchJourney,
   startCheckout,
   subscribeToAlerts,
   watchJourney,
+  type AuthUser,
   type JourneyQuery,
 } from "./api";
 import {
@@ -21,6 +23,7 @@ import {
 } from "./notifications";
 import { subscribeToPush, updatePushJourney } from "./push";
 import { HomePage } from "./pages/HomePage";
+import { AccountPage } from "./pages/AccountPage";
 import { ChatWidget, type ChatMessage } from "./components/ChatWidget";
 import { JourneyPlannerPage } from "./pages/JourneyPlannerPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
@@ -46,12 +49,13 @@ function loadStoredPlan(): StoredPlan | null {
   }
 }
 
-const PAGES = ["home", "journey", "subscriptions"] as const;
+const PAGES = ["home", "journey", "subscriptions", "account"] as const;
 type Page = (typeof PAGES)[number];
 const PAGE_LABEL: Record<Page, string> = {
   home: "Home",
   journey: "Journey Planner",
   subscriptions: "Subscriptions",
+  account: "Account",
 };
 
 function currentPage(): Page {
@@ -164,10 +168,14 @@ export default function App() {
   const selectionsRef = useRef<Record<string, string>>({});
   corridorRef.current = corridor;
   selectionsRef.current = selections;
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isPro, setIsPro] = useState(false);
   const [freeUsed, setFreeUsed] = useState(freePlansUsed);
+  const [billingFreePlansLeft, setBillingFreePlansLeft] = useState<number | null>(null);
   const [planLimitHit, setPlanLimitHit] = useState(false);
-  const freePlansLeft = isPro ? null : Math.max(0, FREE_PLAN_LIMIT - freeUsed);
+  // Anonymous visitors get a soft, client-tracked trial; once signed in, the
+  // server's real count (not resettable by clearing storage) takes over.
+  const freePlansLeft = user ? billingFreePlansLeft : isPro ? null : Math.max(0, FREE_PLAN_LIMIT - freeUsed);
   const [upgrading, setUpgrading] = useState<SubscriptionPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>("default");
@@ -217,8 +225,15 @@ export default function App() {
         .catch(() => setLoadError("Could not load a route. Is the server running on port 4000?"));
     }
 
-    fetchBillingStatus()
-      .then((s) => setIsPro(s.isPro))
+    fetchCurrentUser()
+      .then((u) => {
+        setUser(u);
+        if (!u) return;
+        return fetchBillingStatus().then((s) => {
+          setIsPro(s.isPro);
+          setBillingFreePlansLeft(s.freePlansLeft);
+        });
+      })
       .catch(() => undefined);
 
     setNotifPermission(getNotificationPermission());
@@ -293,7 +308,10 @@ export default function App() {
     const sessionId = params.get("session_id");
     if (params.get("checkout") === "success" && sessionId) {
       confirmCheckout(sessionId)
-        .then((r) => setIsPro(r.isPro))
+        .then((r) => {
+          setIsPro(r.isPro);
+          setBillingFreePlansLeft(null);
+        })
         .finally(() => window.history.replaceState({}, "", window.location.pathname + window.location.hash));
     }
 
@@ -390,16 +408,30 @@ export default function App() {
     setAlerts([]); // a previous journey's alerts don't apply to this one
   }
 
-  /** Free users get FREE_PLAN_LIMIT real journey plans; after that, the planner sends them to Pro. */
+  /** Free users get FREE_PLAN_LIMIT real journey plans; after that, the planner sends them to Pro.
+   * Anonymous visitors are checked against the client-side trial counter (soft, by design -
+   * it shouldn't block someone from trying the product before they've even signed up); signed-in
+   * users are checked against the server's real count instead. */
   function outOfFreePlans(): boolean {
-    if (isPro || freePlansUsed() < FREE_PLAN_LIMIT) return false;
+    if (isPro) return false;
+    const hit = user ? billingFreePlansLeft === 0 : freePlansUsed() >= FREE_PLAN_LIMIT;
+    if (!hit) return false;
     setPlanLimitHit(true);
     window.location.hash = "#/subscriptions";
     return true;
   }
 
   function countFreePlan() {
-    if (!isPro) setFreeUsed(recordFreePlan());
+    if (isPro) return;
+    if (user) {
+      // The server already incremented its own count on a successful plan; just
+      // re-sync the display rather than guessing the new value client-side.
+      fetchBillingStatus()
+        .then((s) => setBillingFreePlansLeft(s.freePlansLeft))
+        .catch(() => undefined);
+    } else {
+      setFreeUsed(recordFreePlan());
+    }
   }
 
   async function handleSearch(query: JourneyQuery) {
@@ -468,6 +500,12 @@ export default function App() {
 
   async function handleUpgrade(plan: SubscriptionPlan) {
     if (upgrading) return;
+    // Checkout is tied to a user record now, so an anonymous visitor needs an
+    // account before Stripe can attach a subscription to anything.
+    if (!user) {
+      window.location.hash = "#/account";
+      return;
+    }
     setUpgrading(plan);
     try {
       const { url } = await startCheckout(plan);
@@ -562,6 +600,25 @@ export default function App() {
             upgrading={upgrading}
             onUpgrade={handleUpgrade}
             limitReached={planLimitHit && !isPro}
+          />
+        )}
+        {page === "account" && (
+          <AccountPage
+            user={user}
+            onAuthChange={(nextUser) => {
+              setUser(nextUser);
+              if (nextUser) {
+                fetchBillingStatus()
+                  .then((s) => {
+                    setIsPro(s.isPro);
+                    setBillingFreePlansLeft(s.freePlansLeft);
+                  })
+                  .catch(() => undefined);
+              } else {
+                setIsPro(false);
+                setBillingFreePlansLeft(null);
+              }
+            }}
           />
         )}
       </main>
